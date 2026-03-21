@@ -3,6 +3,7 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 const outDir = path.resolve("output");
+const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
 await fs.mkdir(outDir, { recursive: true });
 
 const views = [
@@ -114,7 +115,7 @@ async function auditView(browser, definition) {
     if (text.includes("The AudioContext encountered an error from the audio device or the WebAudio renderer.")) return;
     errors.push(`console: ${text}`);
   });
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(250);
   await definition.setup(page);
   await page.waitForTimeout(280);

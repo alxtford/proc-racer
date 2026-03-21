@@ -2,11 +2,12 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 const outputDir = path.resolve(process.cwd(), "output");
+const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
 
 async function captureSplash(browser, viewport, name) {
   const page = await browser.newPage({ viewport });
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(250);
   await page.screenshot({ path: path.join(outputDir, `${name}.png`) });
   await page.close();
@@ -15,7 +16,7 @@ async function captureSplash(browser, viewport, name) {
 async function captureSetup(browser, viewport, name) {
   const page = await browser.newPage({ viewport });
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
   await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
   await page.waitForTimeout(260);
@@ -26,7 +27,7 @@ async function captureSetup(browser, viewport, name) {
 async function captureGarage(browser, viewport, name, pane = "garage") {
   const page = await browser.newPage({ viewport });
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
   await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
   await page.click("#menu-tab-profile");
@@ -39,7 +40,7 @@ async function captureGarage(browser, viewport, name, pane = "garage") {
 async function captureSettings(browser, viewport, name, pane = "comfort") {
   const page = await browser.newPage({ viewport });
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
   await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
   await page.click("#menu-tab-settings");
@@ -52,7 +53,7 @@ async function captureSettings(browser, viewport, name, pane = "comfort") {
 async function capturePause(browser, viewport, name) {
   const page = await browser.newPage({ viewport });
   await page.addInitScript(() => window.localStorage.clear());
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
   await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
   await page.click("#launch-btn");

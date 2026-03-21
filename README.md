@@ -1,5 +1,7 @@
 # Proc Racer
 
+[![Validate](https://github.com/alxtford/proc-racer/actions/workflows/validate.yml/badge.svg)](https://github.com/alxtford/proc-racer/actions/workflows/validate.yml)
+
 Top-down browser arcade racer built for fast starts, forgiving mistakes, and short-session replayability.
 
 ## Product
@@ -20,11 +22,14 @@ Open `http://127.0.0.1:4173`.
 
 `npm run validate`
 
+This entrypoint is self-contained. It starts a temporary static server, runs seeded generation checks, and runs the garage/foundry browser validation.
+
 ## Repository Notes
 
 - Generated screenshots and browser traces under `output/` are local validation artifacts and are not tracked.
 - `progress.md` is a local working log and is intentionally ignored.
 - Source of truth for product direction lives in `README.md` and `docs/`.
+- Contributor workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Repo Map
 
@@ -38,6 +43,7 @@ Open `http://127.0.0.1:4173`.
 - [src/data/content.js](src/data/content.js): authored events, cars, modifiers, pickups, biomes
 - [scripts/validate-content.mjs](scripts/validate-content.mjs): seeded content sanity checks
 - [scripts/check-garage-loop.mjs](scripts/check-garage-loop.mjs): garage/foundry UI and economy sanity checks
+- [scripts/run-validate-suite.mjs](scripts/run-validate-suite.mjs): temporary static server plus full validation entrypoint
 
 ## Design Guardrails
 

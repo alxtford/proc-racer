@@ -3,6 +3,7 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 const outputDir = path.resolve(process.cwd(), "output");
+const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
 const states = [
   { name: "post-polish-splash" },
   {
@@ -121,7 +122,7 @@ async function main() {
     errors.push(`console: ${text}`);
   });
 
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(400);
 
   for (const state of states) {

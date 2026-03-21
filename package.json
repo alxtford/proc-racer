@@ -6,7 +6,7 @@
   "scripts": {
     "start": "npm run serve",
     "serve": "python -m http.server 4173",
-    "validate": "npm run validate:content && npm run validate:garage",
+    "validate": "node scripts/run-validate-suite.mjs",
     "validate:content": "node scripts/validate-content.mjs",
     "validate:garage": "node scripts/check-garage-loop.mjs"
   },
