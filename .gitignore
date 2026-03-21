@@ -1,0 +1,25 @@
+node_modules/
+output/
+
+# Local working notes
+progress.md
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Coverage or temp output
+coverage/
+tmp/
+temp/

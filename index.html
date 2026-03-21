@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proc Racer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <canvas id="game" width="1280" height="720"></canvas>
+    <div id="hud">
+      <div class="panel cluster-left race-panel">
+        <div class="eyebrow">Procedural Neon Racer</div>
+        <div id="event-name" class="title">Event</div>
+        <div id="event-meta" class="meta">Goal</div>
+      </div>
+      <div id="banner" class="banner hidden"></div>
+      <div id="race-toast" class="race-toast hidden"></div>
+      <div id="tutorial-card" class="tutorial-card hidden">
+        <div id="tutorial-step" class="section-label">Tutorial</div>
+        <div id="tutorial-copy" class="tutorial-copy">Accelerate to start moving.</div>
+      </div>
+      <div id="hud-bottom" class="hud-bottom">
+        <div class="hud-module hud-module-primary">
+          <div class="section-label">Race State</div>
+          <div class="hud-primary-row">
+            <div id="hud-place-pill" class="hud-pill">P1</div>
+            <div id="hud-progress-ring" class="hud-pill hud-pill-wide">Lap 1 / 3</div>
+            <div id="hud-rival-pill" class="hud-pill hud-pill-muted">Rival offline</div>
+          </div>
+        </div>
+        <div class="hud-module">
+          <div class="hud-label-row">
+            <span class="section-label">Integrity</span>
+            <span id="hud-damage-value" class="hud-metric">100%</span>
+          </div>
+          <div class="meter-shell">
+            <div id="hud-damage-fill" class="meter-fill meter-fill-danger"></div>
+          </div>
+        </div>
+        <div class="hud-module">
+          <div class="hud-label-row">
+            <span class="section-label">Speed</span>
+            <span id="hud-speed-value" class="hud-metric">000</span>
+          </div>
+          <div class="meter-shell">
+            <div id="hud-speed-fill" class="meter-fill meter-fill-cyan"></div>
+          </div>
+        </div>
+        <div class="hud-module hud-module-icons">
+          <div id="hud-pickup-chip" class="status-chip">Pickup none</div>
+          <div id="hud-assist-chip" class="status-chip">Assist stable</div>
+          <div id="hud-slipstream-chip" class="status-chip">Slipstream idle</div>
+          <div id="hud-ghost-chip" class="status-chip">Ghost offline</div>
+        </div>
+      </div>
+      <div id="pause" class="pause hidden">
+        <div class="pause-shell">
+          <div class="eyebrow">Race Paused</div>
+          <div id="pause-title" class="results-title pause-title">Take The Breath You Need</div>
+          <div id="pause-copy" class="results-subtitle">Resume immediately, restart the event, or tune accessibility without leaving the run.</div>
+          <div class="pause-grid">
+            <div class="pause-card pause-card-primary">
+              <div class="section-label">Resume Fast</div>
+              <div id="pause-goal" class="focus-copy">Current goal goes here.</div>
+              <div id="pause-meta" class="focus-meta">Position, pickup, and pressure summary.</div>
+              <div class="action-row pause-actions">
+                <button id="pause-resume-btn" class="start-btn">Resume Race</button>
+                <button id="pause-retry-btn" class="secondary-btn">Restart Event</button>
+                <button id="pause-menu-btn" class="secondary-btn">Back To Menu</button>
+              </div>
+            </div>
+            <div class="pause-card">
+              <div class="section-label">Quick Settings</div>
+              <div class="settings-grid settings-grid-compact">
+                <label class="settings-row">
+                  <span>Master volume</span>
+                  <input id="pause-volume" class="settings-range" type="range" min="0" max="100" step="1" value="65">
+                </label>
+                <label class="settings-row settings-row-toggle">
+                  <span>Mute audio</span>
+                  <input id="pause-mute" type="checkbox">
+                </label>
+                <label class="settings-row settings-row-toggle">
+                  <span>Reduced shake</span>
+                  <input id="pause-shake" type="checkbox">
+                </label>
+                <label class="settings-row">
+                  <span>Assist level</span>
+                  <select id="pause-assist" class="settings-select">
+                    <option value="high">High</option>
+                    <option value="standard">Standard</option>
+                    <option value="off">Off</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="results" class="results hidden">
+        <div class="results-shell">
+          <div class="eyebrow">Run Summary</div>
+          <div id="results-title" class="results-title">Event Complete</div>
+          <div id="results-subtitle" class="results-subtitle">Result pending</div>
+          <div class="results-guidance">
+            <div id="results-note" class="results-note">You finished the run.</div>
+            <div id="results-next" class="results-next">Retry for a cleaner medal line or head back to the menu.</div>
+          </div>
+          <div class="results-grid">
+            <div class="results-card">
+              <div class="section-label">Medal</div>
+              <div id="results-medal" class="results-medal">Steel</div>
+              <div id="results-place" class="results-copy">Place 1 / 6</div>
+            </div>
+            <div class="results-card">
+              <div class="section-label">Run Metrics</div>
+              <div id="results-stats" class="results-list"></div>
+            </div>
+            <div class="results-card">
+              <div class="section-label">Goals</div>
+              <div id="results-goals" class="results-list"></div>
+            </div>
+            <div class="results-card">
+              <div class="section-label">Progress</div>
+              <div id="results-progress" class="results-list"></div>
+            </div>
+          </div>
+          <div class="action-row results-actions">
+            <button id="results-retry-btn" class="start-btn">Race Again</button>
+            <button id="results-menu-btn" class="secondary-btn">Back To Menu</button>
+          </div>
+        </div>
+      </div>
+      <div id="menu" class="menu">
+        <div class="menu-stage">
+          <div id="splash-shell" class="splash-shell">
+            <section id="menu-splash" class="menu-splash">
+              <div class="splash-mark eyebrow">Procedural Neon Racer</div>
+              <div class="splash-frame">
+                <div class="splash-copy-stack">
+                  <div class="splash-kicker-row">
+                    <div class="splash-kicker">Start fast. Wreck hard. Recover quickly.</div>
+                    <button id="splash-overview-info" class="info-btn" type="button" aria-label="About Proc Racer">i</button>
+                  </div>
+                  <h1 class="splash-title">PROC RACER</h1>
+                  <p class="splash-copy">
+                    A neon arcade racer built for instant runs, stylish wrecks, and forgiving recoveries.
+                  </p>
+                  <div class="action-row splash-actions">
+                    <button id="start-btn" class="start-btn splash-start-btn">Enter Race Setup</button>
+                  </div>
+                  <div class="splash-hint">Press <strong>Enter</strong> to continue into race setup.</div>
+                </div>
+                <div class="splash-feature-strip">
+                  <div class="splash-feature">
+                    <div class="splash-feature-head">
+                      <div class="section-label">Procedural Runs</div>
+                      <button id="splash-runs-info" class="info-btn" type="button" aria-label="Procedural runs help">i</button>
+                    </div>
+                  </div>
+                  <div class="splash-feature">
+                    <div class="splash-feature-head">
+                      <div class="section-label">Forgiving Pace</div>
+                      <button id="splash-recovery-info" class="info-btn" type="button" aria-label="Forgiving pace help">i</button>
+                    </div>
+                  </div>
+                  <div class="splash-feature">
+                    <div class="splash-feature-head">
+                      <div class="section-label">Replay Hook</div>
+                      <button id="splash-replay-info" class="info-btn" type="button" aria-label="Replay hook help">i</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div id="menu-shell" class="menu-shell hidden">
+            <section class="setup-shell">
+              <div class="hub-header">
+                <div class="hub-header-main">
+                  <div id="menu-eyebrow" class="eyebrow">Fast-launch neon racing</div>
+                  <div class="hub-title-row">
+                    <div class="hub-title-with-info">
+                      <div id="hub-title" class="hub-title">Race Setup</div>
+                      <button id="menu-overview-info" class="info-btn" type="button" aria-label="Race setup help">i</button>
+                    </div>
+                    <div class="hero-meta hub-meta">
+                      <span id="career-status" class="hero-chip">Recommended: guided start</span>
+                      <span id="daily-status" class="hero-chip">Today's daily is live</span>
+                      <span id="ghost-status" class="hero-chip">Ghosts ready</span>
+                    </div>
+                  </div>
+                  <p id="menu-intro" class="intro hub-intro">
+                    Start a dramatic race in seconds. Wreck hard, recover fast, and always know what is worth chasing next.
+                  </p>
+                </div>
+                <div class="hub-launch hub-home-only">
+                  <div class="action-row action-row-primary hub-actions">
+                    <button id="launch-btn" class="start-btn">Start Guided Run</button>
+                    <button id="daily-btn" class="secondary-btn">Run Daily Challenge</button>
+                    <button id="quick-race-btn" class="secondary-btn">Skip To Arcade</button>
+                  </div>
+                  <div id="launch-hint" class="launch-hint hub-hint">Press <strong>Enter</strong> to launch the recommended run, <strong>D</strong> for the daily, or <strong>Q</strong> to jump straight into arcade play.</div>
+                </div>
+                <div class="hero-points hub-points hub-home-only">
+                  <div class="hero-point">
+                    <div class="point-label">Run Next</div>
+                    <div id="event-format-hero" class="point-value">Ignition Class is the shortest path into the loop.</div>
+                  </div>
+                  <div class="hero-point">
+                    <div class="point-label">Mistakes</div>
+                    <div id="hero-recovery-copy" class="point-value">Minor hits should cost pace first, not the whole race.</div>
+                  </div>
+                  <div class="hero-point">
+                    <div class="point-label">Replay Hook</div>
+                    <div id="hero-replay-copy" class="point-value">Beat par, chase podiums, and reroll quick one-shot races.</div>
+                  </div>
+                  <div class="hero-point">
+                    <div class="point-label">Today</div>
+                    <div id="hero-daily-copy" class="point-value">The daily seed gives returning players one clear reason to jump back in.</div>
+                  </div>
+                </div>
+              </div>
+              <section class="selection-panel">
+                <div class="menu-nav">
+                  <button id="menu-tab-home" class="menu-tab selected">Race</button>
+                  <button id="menu-tab-profile" class="menu-tab">Garage</button>
+                  <button id="menu-tab-settings" class="menu-tab">Settings</button>
+                </div>
+                <div id="menu-view-home" class="menu-view">
+                  <div class="menu-home-grid">
+                    <div class="selection-block event-block">
+                      <div class="section-head">
+                        <div class="section-head-main">
+                          <div class="section-label">Pick A Run</div>
+                          <button id="event-info-btn" class="info-btn" type="button" aria-label="Run help">i</button>
+                        </div>
+                        <div id="event-focus-badge" class="section-note">Selected</div>
+                      </div>
+                      <div class="focus-card focus-card-event">
+                        <canvas id="event-preview" class="track-preview" width="260" height="146"></canvas>
+                        <div class="focus-copy-stack">
+                          <div id="event-focus-title" class="focus-title">Neon Runoff</div>
+                          <div id="event-focus-meta" class="focus-meta">~1:35 // Pressure // Goal: podium</div>
+                          <div id="event-focus-copy" class="focus-copy">Seeded industrial loop with clean opening reads.</div>
+                          <div id="event-focus-modifiers" class="focus-tags"></div>
+                          <div class="focus-inline-meta">
+                            <span id="event-ghost-status" class="mini-tag">Ghost offline</span>
+                            <span id="event-reward-status" class="mini-tag">Fresh reward line</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div id="event-list" class="event-list"></div>
+                    </div>
+                  </div>
+                </div>
+                <div id="menu-view-profile" class="menu-view hidden">
+                  <div class="menu-subnav">
+                    <button id="profile-tab-garage" class="menu-tab menu-subtab selected" type="button">Garage</button>
+                    <button id="profile-tab-foundry" class="menu-tab menu-subtab" type="button">Foundry</button>
+                    <button id="profile-tab-style" class="menu-tab menu-subtab" type="button">Style</button>
+                    <button id="profile-tab-career" class="menu-tab menu-subtab" type="button">Career</button>
+                  </div>
+                  <div id="profile-pane-garage" class="profile-pane">
+                    <div class="garage-pane-grid">
+                      <div class="selection-block car-block">
+                        <div class="section-head">
+                          <div class="section-head-main">
+                            <div class="section-label">Selected Car</div>
+                            <button id="car-info-btn" class="info-btn" type="button" aria-label="Car help">i</button>
+                          </div>
+                          <div id="car-focus-badge" class="section-note">Slot 1 ready</div>
+                        </div>
+                        <div class="garage-hero">
+                          <div class="garage-hero-copy">
+                            <div id="car-focus-role" class="focus-meta">Starter</div>
+                            <div id="car-focus-title" class="focus-title">Grip</div>
+                            <div id="car-focus-copy" class="focus-copy">Hooks hard into corners and keeps recovery easy on short repeat runs.</div>
+                            <div id="car-focus-tags" class="focus-tags"></div>
+                          </div>
+                          <div id="car-focus-stats" class="stat-bars garage-focus-stats"></div>
+                        </div>
+                      </div>
+                      <div class="selection-block garage-slots-block">
+                        <div class="section-head">
+                          <div class="section-label">Garage Slots</div>
+                          <div class="section-note">3 live slots</div>
+                        </div>
+                        <div id="car-list" class="car-list garage-slot-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="profile-pane-foundry" class="profile-pane hidden">
+                    <div class="garage-foundry-grid">
+                      <div class="selection-block gacha-block">
+                        <div class="section-head">
+                          <div class="section-head-main">
+                            <div class="section-label">Flux Foundry</div>
+                            <button id="gacha-info-btn" class="info-btn" type="button" aria-label="Flux foundry help">i</button>
+                          </div>
+                          <div id="garage-currency" class="section-note">220 Flux</div>
+                        </div>
+                        <div class="gacha-machine">
+                          <div id="gacha-machine-hero" class="gacha-machine-hero">
+                            <div class="gacha-core"></div>
+                            <div class="gacha-ring gacha-ring-a"></div>
+                            <div class="gacha-ring gacha-ring-b"></div>
+                            <div class="gacha-capsule capsule-a"></div>
+                            <div class="gacha-capsule capsule-b"></div>
+                            <div class="gacha-capsule capsule-c"></div>
+                          </div>
+                          <div class="gacha-machine-copy">
+                            <div class="focus-title">Crack 3 Procedural Cars</div>
+                            <div id="gacha-roll-copy" class="focus-copy">Spend Flux to reveal three procedural rides, compare them against your three garage slots, then keep any you want.</div>
+                            <div class="mini-tags">
+                              <span class="mini-tag">3 capsules</span>
+                              <span class="mini-tag">Keep 1-3</span>
+                              <span class="mini-tag">Unused cars scrap back</span>
+                            </div>
+                          </div>
+                          <div class="action-row gacha-actions">
+                            <button id="garage-roll-btn" class="start-btn">Roll 3 Cars</button>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="selection-block foundry-insight-block">
+                        <div class="section-head">
+                          <div class="section-label">Foundry Readout</div>
+                          <div id="profile-badge" class="section-note">Foundry ready</div>
+                        </div>
+                        <div id="foundry-insights" class="profile-grid foundry-insights"></div>
+                        <div class="section-head profile-subhead">
+                          <div class="section-label">Slot Pressure</div>
+                          <div class="section-note">Replace only what earns it</div>
+                        </div>
+                        <div id="garage-slot-summary" class="results-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="profile-pane-style" class="profile-pane hidden">
+                    <div class="selection-block style-block">
+                      <div class="section-head">
+                        <div class="section-head-main">
+                          <div class="section-label">Style Locker</div>
+                          <button id="style-info-btn" class="info-btn" type="button" aria-label="Style locker help">i</button>
+                        </div>
+                        <div id="scrap-currency" class="section-note">0 Scrap</div>
+                      </div>
+                      <div id="style-slot-tabs" class="style-slot-tabs"></div>
+                      <div class="style-grid">
+                        <div id="equipped-style" class="style-equipped"></div>
+                        <div id="style-shop" class="style-shop"></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="profile-pane-career" class="profile-pane hidden">
+                    <div class="career-pane-grid">
+                      <div class="selection-block profile-block">
+                        <div class="section-head">
+                          <div class="section-label">Career Snapshot</div>
+                          <div class="section-note">Run by run</div>
+                        </div>
+                        <div id="profile-summary" class="profile-grid"></div>
+                      </div>
+                      <div class="selection-block profile-block">
+                        <div class="section-head">
+                          <div class="section-label">Recent Runs</div>
+                          <div class="section-note">Latest 3</div>
+                        </div>
+                        <div id="profile-runs" class="results-list"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div id="menu-view-settings" class="menu-view hidden">
+                  <div class="menu-subnav">
+                    <button id="settings-tab-comfort" class="menu-tab menu-subtab selected" type="button">Comfort</button>
+                    <button id="settings-tab-controls" class="menu-tab menu-subtab" type="button">Controls</button>
+                  </div>
+                  <div id="settings-pane-comfort" class="settings-pane">
+                    <div class="selection-block settings-block">
+                      <div class="section-head">
+                        <div class="section-head-main">
+                          <div class="section-label">Audio + Accessibility</div>
+                          <button id="settings-audio-info" class="info-btn" type="button" aria-label="Audio and accessibility help">i</button>
+                        </div>
+                        <div class="section-note">Live updates</div>
+                      </div>
+                      <div class="settings-grid">
+                        <label class="settings-row">
+                          <span>Master volume</span>
+                          <input id="settings-volume" class="settings-range" type="range" min="0" max="100" step="1" value="65">
+                        </label>
+                        <label class="settings-row settings-row-toggle">
+                          <span>Mute audio</span>
+                          <input id="settings-mute" type="checkbox">
+                        </label>
+                        <label class="settings-row settings-row-toggle">
+                          <span>Reduced shake</span>
+                          <input id="settings-shake" type="checkbox">
+                        </label>
+                        <label class="settings-row settings-row-toggle">
+                          <span>High contrast</span>
+                          <input id="settings-contrast" type="checkbox">
+                        </label>
+                        <label class="settings-row">
+                          <span>Assist level</span>
+                          <select id="settings-assist" class="settings-select">
+                            <option value="high">High</option>
+                            <option value="standard">Standard</option>
+                            <option value="off">Off</option>
+                          </select>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="settings-pane-controls" class="settings-pane hidden">
+                    <div class="selection-block settings-block">
+                      <div class="section-head">
+                        <div class="section-head-main">
+                          <div class="section-label">Controls + Devices</div>
+                          <button id="settings-controls-info" class="info-btn" type="button" aria-label="Controls and devices help">i</button>
+                        </div>
+                        <div id="bind-status" class="section-note">Hybrid bindings</div>
+                      </div>
+                      <div class="settings-grid">
+                        <label class="settings-row">
+                          <span>Binding mode</span>
+                          <select id="settings-control-mode" class="settings-select">
+                            <option value="hybrid">Hybrid</option>
+                            <option value="custom">Custom</option>
+                          </select>
+                        </label>
+                        <div id="settings-bindings" class="binding-grid"></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            </section>
+          </div>
+        </div>
+      </div>
+      <div id="garage-roll-modal" class="garage-roll-modal hidden">
+        <div class="garage-roll-shell">
+          <div class="section-head">
+            <div class="section-head-main">
+              <div class="section-label">Flux Foundry</div>
+              <div class="results-title garage-roll-title">Capsule Reveal</div>
+            </div>
+            <div id="garage-roll-status" class="section-note">Charging capsules</div>
+          </div>
+          <div class="garage-roll-machine">
+            <div class="garage-roll-capsules">
+              <div class="roll-capsule roll-capsule-a"></div>
+              <div class="roll-capsule roll-capsule-b"></div>
+              <div class="roll-capsule roll-capsule-c"></div>
+            </div>
+          </div>
+          <div id="garage-roll-grid" class="garage-roll-grid"></div>
+          <div class="garage-roll-footer">
+            <div id="garage-roll-summary" class="focus-copy">Revealing three new cars. Hold the line.</div>
+            <div class="action-row garage-roll-actions">
+              <button id="garage-roll-confirm-btn" class="start-btn">Keep 1 Car</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="ui-tooltip" class="ui-tooltip hidden" role="dialog" aria-hidden="true"></div>
+    </div>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
