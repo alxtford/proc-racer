@@ -2,53 +2,54 @@
 
 [![Validate](https://github.com/alxtford/proc-racer/actions/workflows/validate.yml/badge.svg)](https://github.com/alxtford/proc-racer/actions/workflows/validate.yml)
 
-Top-down browser arcade racer built for fast starts, forgiving mistakes, and short-session replayability.
+Proc Racer is a top-down neon arcade racer built for fast starts, forgiving wrecks, and short replayable runs.
 
-## Product
+## What Ships Today
 
-The product intent is documented in [docs/product-intent.md](docs/product-intent.md).
+- Seeded circuit and point-to-point races.
+- Arcade handling, AI rivals, pickups, damage, wrecks, and respawn recovery.
+- A Foundry garage loop with starter cars, random rolls, scrap, and cosmetic unlocks.
+- A replay-first menu flow with daily challenges and short-session progression.
 
-The current UX and frontend audit is documented in [docs/frontend-audit-2026-03-21.md](docs/frontend-audit-2026-03-21.md).
+## Quick Start
 
-## Run
+Requires Node 20+.
 
-`npm install`
-
-`npm start`
+```bash
+npm install
+npm start
+```
 
 Open `http://127.0.0.1:4173`.
 
 ## Validate
 
-`npm run validate`
+```bash
+npm run validate
+```
 
-This entrypoint is self-contained. It starts a temporary static server, runs seeded generation checks, and runs the garage/foundry browser validation.
+This command is self-contained. It starts a temporary static server, runs seeded content checks, and runs the garage/foundry browser validation.
+
+## Key Files
+
+- [src/main.js](src/main.js): runtime loop, rendering, camera, flow, and effects
+- [src/core/ui.js](src/core/ui.js): menu, HUD, tooltips, garage, results, and onboarding copy
+- [src/core/gameplay.js](src/core/gameplay.js): driving, damage, respawn, pickups, and AI interactions
+- [src/core/generator.js](src/core/generator.js): seeded track generation and event beats
+- [src/core/save.js](src/core/save.js): progression, garage persistence, unlocks, and ghost data
+- [src/data/content.js](src/data/content.js): authored cars, events, biomes, pickups, and modifiers
+- [scripts/run-validate-suite.mjs](scripts/run-validate-suite.mjs): full local validation entrypoint
+- [scripts/serve.mjs](scripts/serve.mjs): local static server used by `npm start`
+
+## Docs
+
+- [docs/product-intent.md](docs/product-intent.md): product thesis and UX guardrails
+- [docs/frontend-audit-2026-03-21.md](docs/frontend-audit-2026-03-21.md): frontend review and follow-up findings
+- [CONTRIBUTING.md](CONTRIBUTING.md): contributor workflow and validation expectations
 
 ## Repository Notes
 
 - Generated screenshots and browser traces under `output/` are local validation artifacts and are not tracked.
 - `progress.md` is a local working log and is intentionally ignored.
 - Source of truth for product direction lives in `README.md` and `docs/`.
-- Contributor workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-## Repo Map
-
-- [index.html](index.html): app shell, menu, HUD, results overlay
-- [style.css](style.css): visual system and layout
-- [src/main.js](src/main.js): runtime loop, rendering, camera, input, flow
-- [src/core/ui.js](src/core/ui.js): user-facing copy, menu sync, HUD, results
-- [src/core/gameplay.js](src/core/gameplay.js): driving, damage, respawn, pickups, AI interactions
-- [src/core/generator.js](src/core/generator.js): seeded track generation and event beats
-- [src/core/save.js](src/core/save.js): progression, bests, ghost persistence
-- [src/data/content.js](src/data/content.js): authored events, cars, modifiers, pickups, biomes
-- [scripts/validate-content.mjs](scripts/validate-content.mjs): seeded content sanity checks
-- [scripts/check-garage-loop.mjs](scripts/check-garage-loop.mjs): garage/foundry UI and economy sanity checks
-- [scripts/run-validate-suite.mjs](scripts/run-validate-suite.mjs): temporary static server plus full validation entrypoint
-
-## Design Guardrails
-
-- Launch a race in seconds.
-- Make mistakes sting, not kill the run.
-- Keep UI readable at speed.
-- Give returning players a reason to improve and return.
-- Favor atmosphere and motion over clutter.
+- The runtime is modular under `src/`; do not reintroduce legacy single-file game logic.

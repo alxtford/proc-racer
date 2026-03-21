@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "npm run serve",
-    "serve": "python -m http.server 4173",
+    "start": "node scripts/serve.mjs",
+    "serve": "npm start",
     "validate": "node scripts/run-validate-suite.mjs",
     "validate:content": "node scripts/validate-content.mjs",
     "validate:garage": "node scripts/check-garage-loop.mjs"
