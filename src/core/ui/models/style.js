@@ -1,7 +1,12 @@
 import { getCurrencyBalance } from "../../economy.js";
-import { ensureStyleLocker, getEquippedCosmeticDefs, isCosmeticOwned } from "../../styleLocker.js";
+import { ensureStyleLocker, getEquippedCosmeticDefs, getGarageCarStyle, isCosmeticOwned } from "../../styleLocker.js";
 import { COSMETIC_SLOTS, getCosmeticsBySlot } from "../../../data/cosmetics.js";
-import { getStylePageSize } from "../legacy.js";
+import {
+  getSelectedGarageCar,
+  getStylePageSize,
+  getStylePreviewSourceLabel,
+  getStylePreviewStatusCopy,
+} from "../legacy.js";
 
 function clampPage(page, pageCount) {
   return Math.max(0, Math.min(pageCount - 1, Number.isInteger(page) ? page : 0));
@@ -17,21 +22,37 @@ export function buildStyleModel(state, route) {
   const visibleItems = slotItems.slice(page * pageSize, (page + 1) * pageSize);
   const equipped = getEquippedCosmeticDefs(state.save);
   const activeStyleItem = equipped[activeSlot] || null;
+  const selectedCar = getSelectedGarageCar(state);
+  const previewCandidate = slotItems.find((item) => item.id === route.stylePreviewItemId) || null;
+  const previewItem = previewCandidate?.slot === activeSlot ? previewCandidate : activeStyleItem;
+  const previewOwned = previewItem ? isCosmeticOwned(state.save, previewItem.id) : false;
+  const previewStyle = selectedCar
+    ? getGarageCarStyle(state.save, selectedCar, previewItem ? { [activeSlot]: previewItem.id } : null)
+    : null;
   return {
     type: "style",
     scrap: getCurrencyBalance(state.save, "scrap"),
     activeSlot,
     page,
     pageCount,
+    slotCount: slotItems.length,
     slots: COSMETIC_SLOTS,
     equippedItem: activeStyleItem,
+    preview: {
+      item: previewItem,
+      owned: previewOwned,
+      style: previewStyle,
+      carName: selectedCar?.name || "No active car",
+      sourceLabel: getStylePreviewSourceLabel(previewItem, activeStyleItem, previewOwned),
+      statusCopy: getStylePreviewStatusCopy(activeSlot, previewItem, activeStyleItem, selectedCar),
+    },
     visibleItems: visibleItems.map((item) => {
       const owned = isCosmeticOwned(state.save, item.id);
-      const equippedItemId = state.save.equippedCosmetics?.[activeSlot];
-      const selected = equippedItemId === item.id;
+      const selected = activeStyleItem?.id === item.id;
       return {
         ...item,
         owned,
+        previewing: route.stylePreviewItemId === item.id,
         selected,
         action: owned ? "equip" : "buy",
         actionLabel: selected ? "Equipped" : owned ? "Equip" : `Buy ${item.cost} Scrap`,

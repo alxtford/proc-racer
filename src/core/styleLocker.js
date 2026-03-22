@@ -57,17 +57,20 @@ export function equipCosmetic(save, itemId) {
   return { ok: true, item };
 }
 
-export function getEquippedCosmeticDefs(save) {
+export function getEquippedCosmeticDefs(save, cosmeticOverrides = null) {
   ensureStyleLocker(save);
+  const defaults = createDefaultEquippedCosmetics();
   return COSMETIC_SLOTS.reduce((acc, slot) => {
-    const itemId = save.equippedCosmetics?.[slot];
-    acc[slot] = COSMETIC_DEFS[itemId] || COSMETIC_DEFS[createDefaultEquippedCosmetics()[slot]];
+    const overrideId = typeof cosmeticOverrides?.[slot] === "string" ? cosmeticOverrides[slot] : null;
+    const itemId = overrideId || save.equippedCosmetics?.[slot];
+    const resolved = COSMETIC_DEFS[itemId];
+    acc[slot] = resolved?.slot === slot ? resolved : COSMETIC_DEFS[defaults[slot]];
     return acc;
   }, {});
 }
 
-export function getGarageCarStyle(save, car) {
-  const cosmetics = getEquippedCosmeticDefs(save);
+export function getGarageCarStyle(save, car, cosmeticOverrides = null) {
+  const cosmetics = getEquippedCosmeticDefs(save, cosmeticOverrides);
   const skin = cosmetics.skin;
   const trail = cosmetics.trail;
   const skid = cosmetics.skid;

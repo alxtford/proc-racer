@@ -407,6 +407,7 @@ function renderCosmeticPreview(item, slotOverride = item?.slot) {
         <div class="style-preview-rig style-preview-rig-drive">
           <div class="style-preview-car">
             <span class="style-preview-car-cabin"></span>
+            <span class="style-preview-car-stripe"></span>
           </div>
         </div>
         <div class="style-preview-trail-line"></div>
@@ -437,8 +438,63 @@ function renderCosmeticPreview(item, slotOverride = item?.slot) {
       <div class="style-preview-rig">
         <div class="style-preview-car">
           <span class="style-preview-car-cabin"></span>
+          <span class="style-preview-car-stripe"></span>
         </div>
       </div>
+    </div>
+  `;
+}
+
+function getStylePreviewSourceLabel(previewItem, activeItem, owned) {
+  if (!previewItem || previewItem.id === activeItem?.id) return "Current loadout";
+  return owned ? "Locker preview" : "Shop preview";
+}
+
+function getStylePreviewStatusCopy(slot, previewItem, activeItem, selectedCar) {
+  const carName = selectedCar?.name || "active car";
+  if (!previewItem || previewItem.id === activeItem?.id) {
+    return `Current ${slot} loadout on ${carName}.`;
+  }
+  if (slot === "emote") {
+    return `Results stinger preview for ${carName} before you commit.`;
+  }
+  return `Previewing ${previewItem.name} on ${carName} before you buy or equip.`;
+}
+
+function renderStyleLivePreview(style, slot, previewItem) {
+  const accent = style?.accentColor || getPreviewAccent(previewItem, slot);
+  const body = style?.bodyColor || accent;
+  const trail = style?.trailColor || accent;
+  const skid = style?.skidColor || "rgba(220, 232, 255, 0.18)";
+  const badge = style?.emoteBadge || previewItem?.badge || "STEEL SET";
+  const previewId = previewItem?.id || `${slot}-live`;
+  if (slot === "emote") {
+    return `
+      <div class="style-preview style-preview-live" data-slot="emote" data-preview-id="${previewId}" style="--preview-accent:${accent};--preview-body:${body};--preview-trail:${trail};--preview-skid:${skid};">
+        <div class="style-preview-emote-wrap">
+          <div class="style-preview-emote">${badge}</div>
+        </div>
+        <div class="style-preview-results-mark">RESULTS STINGER LIVE</div>
+      </div>
+    `;
+  }
+  return `
+    <div class="style-preview style-preview-live" data-slot="${slot}" data-preview-id="${previewId}" style="--preview-accent:${accent};--preview-body:${body};--preview-trail:${trail};--preview-skid:${skid};">
+      <div class="style-preview-rig${slot === "trail" ? " style-preview-rig-drive" : ""}">
+        <div class="style-preview-car">
+          <span class="style-preview-car-cabin"></span>
+          <span class="style-preview-car-stripe"></span>
+        </div>
+      </div>
+      ${slot === "trail" ? `
+        <div class="style-preview-trail-line"></div>
+        <div class="style-preview-trail-line style-preview-trail-line-b"></div>
+      ` : ""}
+      ${slot === "skid" ? `
+        <div class="style-preview-skid-line"></div>
+        <div class="style-preview-skid-line style-preview-skid-line-b"></div>
+        <div class="style-preview-skid-spark"></div>
+      ` : ""}
     </div>
   `;
 }
@@ -2396,12 +2452,15 @@ export {
   getSelectedGarageCar,
   getStartLabel,
   getStoredMedal,
+  getStylePreviewSourceLabel,
+  getStylePreviewStatusCopy,
   getStylePageSize,
   isStarterCosmetic,
   medalForResult,
   medalRank,
   normalizeCourseSeed,
   renderCosmeticPreview,
+  renderStyleLivePreview,
   renderStatTiles,
   supportsCustomCourseSeed,
 };
