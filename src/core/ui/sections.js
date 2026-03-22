@@ -19,8 +19,8 @@ export const SCREEN_SECTION_OPTIONS = {
     { id: "shop", label: "Shop" },
   ],
   career: [
-    { id: "snapshot", label: "Snapshot" },
-    { id: "runs", label: "Runs" },
+    { id: "snapshot", label: "Trends" },
+    { id: "runs", label: "History" },
   ],
   settings: [
     { id: "comfort", label: "Comfort" },

@@ -85,6 +85,11 @@ if (!(await buyButton.count())) {
   }
 }
 
+if (await page.locator('[data-route-section="loadout"]').count()) {
+  await page.click('[data-route-section="loadout"]');
+  await page.waitForTimeout(120);
+}
+
 await page.waitForTimeout(180);
 await page.screenshot({ path: path.join(outDir, "garage-loop.png") });
 
