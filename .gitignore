@@ -3,6 +3,7 @@ output/
 
 # Local working notes
 progress.md
+.codex/
 
 # Logs
 *.log
