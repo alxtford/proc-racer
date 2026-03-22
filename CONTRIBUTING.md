@@ -8,6 +8,29 @@
 
 Open `http://127.0.0.1:4173`.
 
+## Automation Setup
+
+One-time GitHub auth setup for worktree automations:
+
+`powershell -ExecutionPolicy Bypass -File C:\Users\AlexFord\.codex\automations\setup-proc-racer-automation-gh.ps1`
+
+This prompts for a GitHub token and stores it as the user environment variable `GH_TOKEN` for future Codex sessions.
+
+Worktree automations should then bootstrap from the worktree itself:
+
+`powershell -ExecutionPolicy Bypass -File scripts/codex-automation-setup.ps1 -RequireGh`
+
+This script:
+
+- installs dependencies when `node_modules/` is missing or stale for that worktree
+- requires `GH_TOKEN` or `GITHUB_TOKEN` to already be present in the environment
+
+Interactive `gh` keyring auth is not enough for background worktree automations. They should use an environment variable instead.
+
+Cleanup command if you want to remove the automation token later:
+
+`powershell -ExecutionPolicy Bypass -File C:\Users\AlexFord\.codex\automations\cleanup-proc-racer-automation-gh.ps1`
+
 ## Validation
 
 `npm run validate`
