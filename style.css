@@ -3227,6 +3227,11 @@ body[data-contrast="high"]::before {
   box-shadow: 0 0 24px rgba(255, 31, 209, 0.12);
 }
 
+.style-card.previewing {
+  border-color: rgba(141, 247, 255, 0.38);
+  box-shadow: 0 0 28px rgba(141, 247, 255, 0.12);
+}
+
 .style-card[disabled] {
   cursor: default;
   opacity: 0.74;
@@ -3246,6 +3251,16 @@ body[data-contrast="high"]::before {
   display: grid;
   gap: 8px;
   align-content: start;
+}
+
+.style-live-card {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding-bottom: 12px;
+  background:
+    linear-gradient(160deg, rgba(12, 19, 37, 0.96), rgba(8, 13, 25, 0.9)),
+    radial-gradient(circle at top right, rgba(255, 31, 209, 0.12), transparent 34%);
 }
 
 .style-equipped-card .profile-note {
@@ -3314,7 +3329,7 @@ body[data-contrast="high"]::before {
   height: 42px;
   border-radius: 18px 24px 14px 14px;
   transform: translate(-50%, -50%);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--preview-accent) 56%, #122446), #0b1223 78%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--preview-body, var(--preview-accent)) 72%, #122446), #0b1223 78%);
   box-shadow:
     0 0 20px color-mix(in srgb, var(--preview-accent) 24%, transparent),
     inset 0 -10px 18px rgba(0, 0, 0, 0.28);
@@ -3350,6 +3365,17 @@ body[data-contrast="high"]::before {
   background: rgba(227, 245, 255, 0.4);
 }
 
+.style-preview-car-stripe {
+  position: absolute;
+  left: 18px;
+  right: 16px;
+  bottom: 9px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--preview-accent) 58%, white 8%), transparent 94%);
+  opacity: 0.82;
+}
+
 .style-preview[data-slot="trail"] .style-preview-car {
   width: 74px;
   height: 30px;
@@ -3363,7 +3389,7 @@ body[data-contrast="high"]::before {
   top: 50%;
   height: 8px;
   transform: translateY(-50%);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--preview-accent) 72%, white 20%), transparent 88%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--preview-trail, var(--preview-accent)) 72%, white 20%), transparent 88%);
   filter: blur(0.8px);
   transform-origin: left center;
   animation: styleTrailPulse 1.9s ease-in-out infinite;
@@ -3384,7 +3410,7 @@ body[data-contrast="high"]::before {
   right: 16%;
   height: 6px;
   top: 40%;
-  background: linear-gradient(90deg, transparent, var(--preview-accent) 30%, transparent 88%);
+  background: linear-gradient(90deg, transparent, var(--preview-skid, var(--preview-accent)) 30%, transparent 88%);
   opacity: 0.9;
   transform: rotate(-7deg);
   animation: styleSkidSweep 2.1s ease-in-out infinite;
@@ -3403,10 +3429,85 @@ body[data-contrast="high"]::before {
   width: 18px;
   height: 18px;
   background:
-    radial-gradient(circle, color-mix(in srgb, var(--preview-accent) 88%, white 10%) 0 26%, transparent 28%),
-    radial-gradient(circle, color-mix(in srgb, var(--preview-accent) 60%, #ffb100 20%) 0 16%, transparent 18%);
+    radial-gradient(circle, color-mix(in srgb, var(--preview-skid, var(--preview-accent)) 88%, white 10%) 0 26%, transparent 28%),
+    radial-gradient(circle, color-mix(in srgb, var(--preview-skid, var(--preview-accent)) 60%, #ffb100 20%) 0 16%, transparent 18%);
   filter: blur(0.4px);
   animation: styleSparkPulse 1.5s ease-in-out infinite;
+}
+
+.style-preview-live {
+  min-height: 156px;
+  border-color: rgba(141, 247, 255, 0.18);
+  box-shadow:
+    inset 0 0 0 1px rgba(141, 247, 255, 0.06),
+    0 0 30px rgba(141, 247, 255, 0.06);
+}
+
+.style-preview-live .style-preview-car {
+  width: 126px;
+  height: 54px;
+}
+
+.style-preview-live[data-slot="trail"] .style-preview-car,
+.style-preview-live[data-slot="skid"] .style-preview-car {
+  width: 108px;
+  height: 44px;
+  left: 44%;
+}
+
+.style-preview-live .style-preview-car-cabin {
+  left: 30px;
+  top: 10px;
+  width: 44px;
+  height: 16px;
+}
+
+.style-preview-live .style-preview-car-stripe {
+  left: 22px;
+  right: 20px;
+  bottom: 11px;
+  height: 8px;
+}
+
+.style-preview-live .style-preview-trail-line {
+  left: 48%;
+  right: 10%;
+  height: 10px;
+}
+
+.style-preview-live .style-preview-trail-line-b {
+  left: 50%;
+  right: 16%;
+  height: 6px;
+}
+
+.style-preview-live .style-preview-skid-line {
+  left: 16%;
+  right: 12%;
+  height: 7px;
+}
+
+.style-preview-live .style-preview-skid-line-b {
+  transform: rotate(-7deg) translateX(18px);
+}
+
+.style-preview-live .style-preview-skid-spark {
+  right: 20%;
+  width: 20px;
+  height: 20px;
+}
+
+.style-preview-results-mark {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 14px;
+  color: rgba(227, 245, 255, 0.72);
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.66rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  text-align: center;
 }
 
 .style-preview-emote-wrap {

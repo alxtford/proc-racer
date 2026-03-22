@@ -55,6 +55,7 @@ export function createRouteState(state) {
     boardPage: null,
     styleSlot: "skin",
     stylePage: 0,
+    stylePreviewItemId: null,
     resultsPane: "summary",
   };
 }

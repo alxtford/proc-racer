@@ -33,6 +33,7 @@ import {
 } from "./routes.js";
 import { getRouteSection, getSectionOptions, setRouteSection as assignRouteSection } from "./sections.js";
 import { renderActiveScreen, renderOverlays, renderShell } from "./screens.js";
+import { renderStylePreviewCards } from "./renderers/style.js";
 
 function createRefs() {
   return {
@@ -252,6 +253,7 @@ export function createUi(state, callbacks = {}) {
 
   function setRouteScreen(screen) {
     const nextScreen = normalizeMenuScreen(screen);
+    if (nextScreen !== "style") route.stylePreviewItemId = null;
     route.stage = "hub";
     route.screen = nextScreen;
     assignRouteSection(route, nextScreen, getRouteSection(route, nextScreen));
@@ -263,6 +265,7 @@ export function createUi(state, callbacks = {}) {
 
   function setRouteSection(section) {
     const nextSection = assignRouteSection(route, route.screen, section);
+    if (route.screen === "style") route.stylePreviewItemId = null;
     callbacks.onMenuSectionChange?.(route.screen, nextSection);
     syncMenu();
   }
@@ -596,6 +599,24 @@ export function createUi(state, callbacks = {}) {
     return target instanceof Element ? target.closest(".info-btn[data-tooltip]") : null;
   }
 
+  function closestStyleCard(target) {
+    return target instanceof Element ? target.closest(".style-card[data-style-id]") : null;
+  }
+
+  function updateStylePreview(nextItemId = null) {
+    const normalized = typeof nextItemId === "string" ? nextItemId : null;
+    if (route.stylePreviewItemId === normalized) return;
+    route.stylePreviewItemId = normalized;
+    if (route.screen !== "style") return;
+    const previewHost = getScreenEl("equipped-style");
+    if (!previewHost) return;
+    previewHost.innerHTML = renderStylePreviewCards(deriveScreenModel(state, route));
+    refs.hubScreen.querySelectorAll(".style-card").forEach((card) => {
+      card.classList.toggle("previewing", card.dataset.styleId === route.stylePreviewItemId);
+    });
+    updateMenuScale();
+  }
+
   refs.splashStartBtn?.addEventListener("click", () => callbacks.onEnterGarage?.());
   refs.pauseResume.addEventListener("click", () => callbacks.onPauseResume?.());
   refs.pauseRetry.addEventListener("click", () => callbacks.onPauseRetry?.());
@@ -659,10 +680,12 @@ export function createUi(state, callbacks = {}) {
     if (target.dataset.styleSlot) {
       route.styleSlot = target.dataset.styleSlot;
       route.stylePage = 0;
+      route.stylePreviewItemId = null;
       syncMenu();
     }
     if (target.dataset.stylePageNav) {
       route.stylePage = Math.max(0, (route.stylePage || 0) + Number(target.dataset.stylePageNav));
+      route.stylePreviewItemId = null;
       syncMenu();
     }
     if (target.dataset.styleId && target.dataset.styleAction === "buy") callbacks.onCosmeticBuy?.(target.dataset.styleId);
@@ -675,6 +698,20 @@ export function createUi(state, callbacks = {}) {
   refs.hubScreen.addEventListener("input", (event) => {
     const target = event.target;
     if (target.id === "settings-volume") callbacks.onSettingChange?.("masterVolume", Number(target.value) / 100);
+  });
+  refs.hubScreen.addEventListener("pointerover", (event) => {
+    const card = closestStyleCard(event.target);
+    if (!card) return;
+    const previousCard = closestStyleCard(event.relatedTarget);
+    if (previousCard === card) return;
+    updateStylePreview(card.dataset.styleId);
+  });
+  refs.hubScreen.addEventListener("pointerout", (event) => {
+    const card = closestStyleCard(event.target);
+    if (!card) return;
+    const nextCard = closestStyleCard(event.relatedTarget);
+    if (nextCard === card) return;
+    updateStylePreview(null);
   });
   refs.hubScreen.addEventListener("change", (event) => {
     const target = event.target;
@@ -689,6 +726,17 @@ export function createUi(state, callbacks = {}) {
       event.preventDefault();
       callbacks.onCustomCourseSeedApply?.(event.target.value);
     }
+  });
+  refs.hubScreen.addEventListener("focusin", (event) => {
+    const card = closestStyleCard(event.target);
+    if (card) updateStylePreview(card.dataset.styleId);
+  });
+  refs.hubScreen.addEventListener("focusout", (event) => {
+    const card = closestStyleCard(event.target);
+    if (!card) return;
+    const nextCard = closestStyleCard(event.relatedTarget);
+    if (nextCard === card) return;
+    updateStylePreview(null);
   });
 
   document.addEventListener("pointerenter", (event) => {
