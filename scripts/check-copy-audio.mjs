@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+import { waitForMenuStage } from "./menu-helpers.mjs";
 
 const outDir = path.resolve("output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -22,7 +23,7 @@ page.on("console", (message) => {
 await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(350);
 await page.click("#start-btn");
-await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
+await waitForMenuStage(page, "hub");
 await page.screenshot({ path: path.join(outDir, "check-copy-menu.png") });
 
 await page.click("#menu-overview-info");

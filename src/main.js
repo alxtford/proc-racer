@@ -42,6 +42,7 @@ const state = {
   selectedEventIndex: 0,
   selectedCarId: initialSave.selectedCarId,
   menuStage: "splash",
+  menuScreen: "race",
   menuView: "home",
   bindingAction: null,
   events: [],
@@ -91,6 +92,12 @@ const state = {
 };
 
 const audio = createAudioSystem(bus, () => state);
+
+function applyMenuScreen(screen) {
+  state.menuScreen = screen;
+  state.menuView = screen === "race" ? "home" : screen === "settings" ? "settings" : "profile";
+}
+
 const ui = createUi(state, {
   onStartSelected: () => startSelectedRace(),
   onStartDaily: () => startDailyRace(),
@@ -104,10 +111,8 @@ const ui = createUi(state, {
   onPauseResume: () => togglePause(false),
   onPauseRetry: () => retryRace(),
   onPauseMenu: () => backToMenu(),
-  onMenuViewChange: (view) => {
-    state.menuView = view;
-    ui.syncMenu();
-  },
+  onMenuScreenChange: (screen) => applyMenuScreen(screen),
+  onMenuViewChange: (view) => { state.menuView = view; },
   onSettingChange: (key, value) => applySetting(key, value),
   onBindingStart: (action) => beginBinding(action),
   onEventSelect: (index) => {
@@ -283,8 +288,8 @@ function clearDailyProgress(save) {
 function enterGarage() {
   window.setTimeout(() => {
     if (state.mode !== "menu") return;
-    state.menuStage = "garage";
-    state.menuView = "home";
+    state.menuStage = "hub";
+    applyMenuScreen("race");
     ui.syncMenu();
   }, 90);
 }
@@ -474,7 +479,7 @@ function clearCustomCourseSeed() {
 }
 
 function rerollStrikeBoard() {
-  if (state.mode !== "menu" || state.menuStage !== "garage" || state.menuView !== "home" || state.garageRoll) return;
+  if (state.mode !== "menu" || state.menuStage !== "hub" || state.menuScreen !== "race" || state.garageRoll) return;
   const fluxShortfall = Math.max(0, COURSE_REROLL_COST - getCurrencyBalance(state.save, "flux"));
   if (fluxShortfall > 0) {
     ui.showToast(`${fluxShortfall} Flux short`, "neutral", 1);
@@ -517,8 +522,8 @@ function backToMenu() {
   clearGarageRollTimers();
   state.garageRoll = null;
   state.keys.clear();
-  state.menuStage = "garage";
-  state.menuView = "home";
+  state.menuStage = "hub";
+  applyMenuScreen("race");
   state.bindingAction = null;
   setMode("menu");
   state.pendingResult = null;
@@ -529,7 +534,7 @@ function backToMenu() {
 }
 
 function startGarageRoll() {
-  if (state.mode !== "menu" || state.menuView !== "profile" || !getRollReadyStatus(state.save) || state.garageRoll) return;
+  if (state.mode !== "menu" || state.menuScreen !== "foundry" || !getRollReadyStatus(state.save) || state.garageRoll) return;
   const purchase = purchaseStoreProduct(state.save, "garage_roll", "flux");
   if (!purchase.ok) return;
   const seed = Date.now();
@@ -647,7 +652,7 @@ function closeGarageRoll() {
 }
 
 function buyStyleItem(itemId) {
-  if (state.mode !== "menu" || state.menuView !== "profile") return;
+  if (state.mode !== "menu" || state.menuScreen !== "style") return;
   const purchase = buyCosmetic(state.save, itemId, "scrap");
   if (!purchase.ok) return;
   persistSave(state.save);
@@ -661,7 +666,7 @@ function buyStyleItem(itemId) {
 }
 
 function equipStyleItem(itemId) {
-  if (state.mode !== "menu" || state.menuView !== "profile") return;
+  if (state.mode !== "menu" || state.menuScreen !== "style") return;
   const result = equipCosmetic(state.save, itemId);
   if (!result.ok) return;
   persistSave(state.save);
@@ -687,7 +692,7 @@ function applySetting(key, value) {
 }
 
 function beginBinding(action) {
-  state.menuView = "settings";
+  applyMenuScreen("settings");
   state.bindingAction = action;
   ui.syncMenu();
 }
@@ -756,8 +761,8 @@ function isInteractiveShortcutTarget(target) {
 
 function canUseMenuHomeShortcut(target) {
   return state.mode === "menu"
-    && state.menuStage === "garage"
-    && state.menuView === "home"
+    && state.menuStage === "hub"
+    && state.menuScreen === "race"
     && !state.garageRoll
     && !isInteractiveShortcutTarget(target);
 }
@@ -2251,6 +2256,15 @@ function getCarShapeBias(bodyStyle) {
   return { speed: 0, accel: 0, dur: 0, grip: 0 };
 }
 
+function fract(value) {
+  return value - Math.floor(value);
+}
+
+function getCarVariantMix(bodyStyle, speed, accel, durability, grip) {
+  const styleIndex = bodyStyle === "dart" ? 1 : bodyStyle === "brick" ? 2 : bodyStyle === "blade" ? 3 : 4;
+  return fract(Math.sin(styleIndex * 91.733 + speed * 17.317 + accel * 27.491 + durability * 13.913 + grip * 23.731) * 43758.5453123);
+}
+
 function getCarDesign(car, scale = 1) {
   const def = car.def || car;
   const bodyStyle = getCarBodyStyle(car);
@@ -2260,98 +2274,120 @@ function getCarDesign(car, scale = 1) {
   const durability = clamp(normalizeMetric(def.durability || 124, 110, 140) + bias.dur, 0, 1);
   const grip = clamp(normalizeMetric(def.grip || 7, 5.5, 9) + bias.grip, 0, 1);
   const length = (car.length || def.visualLength || 48) * scale;
-  const width = (car.width || def.visualWidth || 26) * scale;
+  const baseWidth = (car.width || def.visualWidth || 26) * scale;
+  const variantMix = getCarVariantMix(bodyStyle, speed, accel, durability, grip);
+  const shipBase = bodyStyle === "blade" ? 0.58 : bodyStyle === "touring" ? 0.26 : bodyStyle === "dart" ? 0.18 : 0.12;
+  const shipMix = clamp(shipBase + (variantMix - 0.5) * 0.34 + speed * 0.14 - durability * 0.07, 0.04, 0.92);
+  const beam = baseWidth * (1.08 + durability * 0.08 + shipMix * 0.1 + (bodyStyle === "brick" ? 0.06 : 0));
+  const noseReach = clamp(speed * 0.72 + grip * 0.28, 0, 1);
+  const rearMass = clamp(accel * 0.58 + durability * 0.42, 0, 1);
 
-  const tailX = -length * lerpValue(0.58, 0.7, accel * 0.68 + durability * 0.32);
-  const rearCoreX = -length * lerpValue(0.22, 0.32, accel * 0.5 + durability * 0.5);
-  const sidepodRearX = -length * lerpValue(0.14, 0.22, accel * 0.45 + durability * 0.55);
-  const sidepodFrontX = length * lerpValue(0.08, 0.18, speed * 0.45 + grip * 0.55);
-  const waistX = length * lerpValue(0.14, 0.24, speed);
-  const noseShoulderX = length * lerpValue(0.42, 0.58, speed);
-  const noseX = length * lerpValue(0.72, 0.9, speed * 0.72 + grip * 0.28);
+  const tailX = -length * lerpValue(0.54, 0.65, rearMass * 0.7 + shipMix * 0.3);
+  const rearHaunchX = -length * lerpValue(0.2, 0.3, rearMass * 0.62 + shipMix * 0.18);
+  const midX = length * lerpValue(-0.02, 0.08, speed * 0.22 + shipMix * 0.34);
+  const shoulderX = length * lerpValue(0.18, 0.3, noseReach * 0.6 + shipMix * 0.28);
+  const noseBaseX = length * lerpValue(0.42, 0.54, noseReach * 0.6 + shipMix * 0.22);
+  const noseChineX = length * lerpValue(0.6, 0.74, noseReach * 0.72 + shipMix * 0.28);
+  const noseX = length * lerpValue(0.76, 0.9, noseReach * 0.74 + shipMix * 0.2);
 
-  const tailHalf = width * lerpValue(0.16, 0.24, accel * 0.55 + durability * 0.45);
-  const rearCoreHalf = width * lerpValue(0.18, 0.28, durability * 0.7 + accel * 0.3);
-  const sidepodHalf = width * lerpValue(0.2, 0.34, durability * 0.74 + accel * 0.26);
-  const waistHalf = width * lerpValue(0.11, 0.18, grip * 0.48 + speed * 0.38 + (1 - durability) * 0.14);
-  const noseShoulderHalf = width * lerpValue(0.16, 0.26, grip * 0.66 + durability * 0.34);
-  const noseHalf = width * lerpValue(0.045, 0.09, speed * 0.78 + grip * 0.22);
+  const tailHalf = beam * lerpValue(0.18, 0.26, rearMass * 0.62 + shipMix * 0.18);
+  const rearHaunchHalf = beam * lerpValue(0.26, 0.38, rearMass * 0.58 + durability * 0.24 + shipMix * 0.18);
+  const midHalf = beam * lerpValue(0.2, 0.3, durability * 0.18 + shipMix * 0.26 + speed * 0.12);
+  const shoulderHalf = beam * lerpValue(0.28, 0.4, grip * 0.28 + shipMix * 0.44 + durability * 0.18);
+  const noseBaseHalf = beam * lerpValue(0.2, 0.29, shipMix * 0.42 + grip * 0.3 + durability * 0.16);
+  const noseChineHalf = beam * lerpValue(0.12, 0.2, shipMix * 0.36 + speed * 0.38 + grip * 0.16);
+  const noseHalf = beam * lerpValue(0.06, 0.11, speed * 0.62 + grip * 0.18 + shipMix * 0.2);
 
-  const cockpitRearX = -length * lerpValue(0.08, 0.16, durability * 0.44 + accel * 0.18);
-  const cockpitMidX = length * lerpValue(0.08, 0.18, speed * 0.48 + grip * 0.2);
-  const cockpitFrontX = length * lerpValue(0.24, 0.34, speed * 0.7 + grip * 0.3);
-  const cockpitHalf = width * lerpValue(0.1, 0.145, durability * 0.42 + speed * 0.18);
-  const canopyNoseHalf = cockpitHalf * lerpValue(0.48, 0.7, grip);
+  const cockpitRearX = -length * lerpValue(0.04, 0.12, rearMass * 0.44 + shipMix * 0.14);
+  const cockpitMidX = length * lerpValue(0.06, 0.16, shipMix * 0.42 + speed * 0.24);
+  const cockpitFrontX = length * lerpValue(0.24, 0.36, noseReach * 0.58 + shipMix * 0.24);
+  const cockpitHalf = beam * lerpValue(0.12, 0.17, shipMix * 0.42 + durability * 0.18);
+  const canopyNoseHalf = cockpitHalf * lerpValue(0.54, 0.76, grip * 0.42 + shipMix * 0.34);
 
-  const frontAxleX = length * lerpValue(0.12, 0.22, speed * 0.4 + grip * 0.6);
-  const rearAxleX = -length * lerpValue(0.22, 0.3, accel * 0.42 + durability * 0.58);
-  const wheelLength = length * lerpValue(0.12, 0.16, speed * 0.42 + grip * 0.18);
-  const wheelWidth = width * lerpValue(0.14, 0.23, durability * 0.68 + grip * 0.32);
-  const wheelOffsetY = Math.max(sidepodHalf, noseShoulderHalf) + wheelWidth * 0.42;
+  const frontAxleX = length * lerpValue(0.18, 0.28, noseReach * 0.46 + shipMix * 0.18);
+  const rearAxleX = -length * lerpValue(0.24, 0.34, rearMass * 0.54 + shipMix * 0.16);
+  const wheelLength = length * lerpValue(0.1, 0.14, speed * 0.28 + grip * 0.12);
+  const wheelWidth = baseWidth * lerpValue(0.18, 0.24, durability * 0.54 + grip * 0.18 + (1 - shipMix) * 0.1);
+  const wheelTrackHalf = Math.max(rearHaunchHalf, shoulderHalf, noseBaseHalf)
+    + wheelWidth * lerpValue(0.1, 0.22, (1 - shipMix) * 0.76 + durability * 0.24);
 
-  const frontWingHalf = width * lerpValue(0.26, 0.38, grip * 0.58 + speed * 0.42);
-  const rearWingHalf = width * lerpValue(0.28, 0.42, speed * 0.4 + accel * 0.2 + grip * 0.4);
-  const rearWingX = tailX - length * 0.04;
+  const splitterHalf = noseBaseHalf * lerpValue(0.82, 1.08, grip * 0.4 + shipMix * 0.3);
+  const splitterRearX = noseBaseX - length * 0.14;
+  const splitterTipX = noseX + length * 0.13;
+  const tailPlaneHalf = rearHaunchHalf * lerpValue(0.62, 0.82, shipMix * 0.48 + grip * 0.2);
+  const tailPlaneX = tailX + length * 0.02;
 
-  const engineCoverRearX = tailX + length * 0.06;
-  const engineCoverFrontX = rearCoreX + length * lerpValue(0.18, 0.3, accel);
-  const engineHalf = width * lerpValue(0.11, 0.19, accel * 0.74 + durability * 0.26);
-  const trailMountX = tailX - length * 0.035;
-  const trailRearHalf = Math.max(rearCoreHalf * 0.94, tailHalf * 1.18);
+  const engineCoverRearX = tailX + length * 0.12;
+  const engineCoverFrontX = cockpitMidX + length * lerpValue(0.08, 0.16, accel * 0.36 + shipMix * 0.22);
+  const engineHalf = beam * lerpValue(0.12, 0.18, accel * 0.54 + durability * 0.18 + shipMix * 0.18);
+  const trailMountX = tailX - length * lerpValue(0.015, 0.055, shipMix * 0.58 + rearMass * 0.22);
+  const trailRearHalf = Math.max(tailHalf * 1.28, rearHaunchHalf * 0.92);
 
   return {
     length,
-    width,
+    width: beam,
     trailMountX,
     trailRearHalf,
     tub: [
       [tailX, -tailHalf],
-      [rearCoreX, -rearCoreHalf],
-      [sidepodRearX, -rearCoreHalf * 0.84],
-      [waistX, -waistHalf],
-      [noseShoulderX, -noseShoulderHalf],
+      [rearHaunchX, -rearHaunchHalf],
+      [midX, -midHalf],
+      [shoulderX, -shoulderHalf],
+      [noseBaseX, -noseBaseHalf],
+      [noseChineX, -noseChineHalf],
       [noseX, -noseHalf],
       [noseX + length * 0.08, 0],
       [noseX, noseHalf],
-      [noseShoulderX, noseShoulderHalf],
-      [waistX, waistHalf],
-      [sidepodRearX, rearCoreHalf * 0.84],
-      [rearCoreX, rearCoreHalf],
+      [noseChineX, noseChineHalf],
+      [noseBaseX, noseBaseHalf],
+      [shoulderX, shoulderHalf],
+      [midX, midHalf],
+      [rearHaunchX, rearHaunchHalf],
       [tailX, tailHalf],
     ],
     floor: [
       [tailX - length * 0.04, -tailHalf * 0.9],
-      [rearCoreX - length * 0.02, -rearCoreHalf * 1.08],
-      [waistX + length * 0.02, -waistHalf * 1.16],
-      [noseShoulderX + length * 0.02, -noseShoulderHalf * 1.1],
-      [noseX + length * 0.02, -noseHalf * 1.18],
+      [rearHaunchX - length * 0.02, -rearHaunchHalf * 1.06],
+      [midX, -midHalf * 1.06],
+      [shoulderX + length * 0.02, -shoulderHalf * 1.04],
+      [noseBaseX + length * 0.02, -noseBaseHalf * 1.1],
+      [noseChineX + length * 0.02, -noseChineHalf * 1.1],
+      [noseX + length * 0.02, -noseHalf * 1.12],
       [noseX + length * 0.1, 0],
-      [noseX + length * 0.02, noseHalf * 1.18],
-      [noseShoulderX + length * 0.02, noseShoulderHalf * 1.1],
-      [waistX + length * 0.02, waistHalf * 1.16],
-      [rearCoreX - length * 0.02, rearCoreHalf * 1.08],
+      [noseX + length * 0.02, noseHalf * 1.12],
+      [noseChineX + length * 0.02, noseChineHalf * 1.1],
+      [noseBaseX + length * 0.02, noseBaseHalf * 1.1],
+      [shoulderX + length * 0.02, shoulderHalf * 1.04],
+      [midX, midHalf * 1.06],
+      [rearHaunchX - length * 0.02, rearHaunchHalf * 1.06],
       [tailX - length * 0.04, tailHalf * 0.9],
     ],
     sidepods: [
       [
-        [sidepodRearX, -sidepodHalf * 0.94],
-        [sidepodFrontX, -sidepodHalf * 0.82],
-        [waistX + length * 0.04, -waistHalf * 1.06],
-        [sidepodRearX + length * 0.1, -rearCoreHalf * 0.72],
+        [rearHaunchX - length * 0.02, -rearHaunchHalf * 0.86],
+        [midX + length * 0.02, -midHalf * 0.78],
+        [shoulderX - length * 0.02, -shoulderHalf * 0.96],
+        [noseBaseX - length * 0.06, -noseBaseHalf * 0.78],
+        [shoulderX - length * 0.12, -shoulderHalf * 0.56],
+        [midX + length * 0.04, -midHalf * 0.62],
       ],
       [
-        [sidepodRearX, sidepodHalf * 0.94],
-        [sidepodFrontX, sidepodHalf * 0.82],
-        [waistX + length * 0.04, waistHalf * 1.06],
-        [sidepodRearX + length * 0.1, rearCoreHalf * 0.72],
+        [rearHaunchX - length * 0.02, rearHaunchHalf * 0.86],
+        [midX + length * 0.02, midHalf * 0.78],
+        [shoulderX - length * 0.02, shoulderHalf * 0.96],
+        [noseBaseX - length * 0.06, noseBaseHalf * 0.78],
+        [shoulderX - length * 0.12, shoulderHalf * 0.56],
+        [midX + length * 0.04, midHalf * 0.62],
       ],
     ],
     engineCover: [
-      [engineCoverRearX, -engineHalf * 0.72],
-      [engineCoverFrontX, -engineHalf],
+      [engineCoverRearX, -engineHalf * 0.7],
+      [cockpitRearX, -engineHalf],
+      [engineCoverFrontX, -engineHalf * 0.82],
       [engineCoverFrontX + length * 0.08, 0],
-      [engineCoverFrontX, engineHalf],
-      [engineCoverRearX, engineHalf * 0.72],
+      [engineCoverFrontX, engineHalf * 0.82],
+      [cockpitRearX, engineHalf],
+      [engineCoverRearX, engineHalf * 0.7],
     ],
     canopy: [
       [cockpitRearX, -cockpitHalf * 0.96],
@@ -2371,35 +2407,58 @@ function getCarDesign(car, scale = 1) {
       [cockpitRearX + length * 0.02, cockpitHalf * 0.24],
     ],
     frontWing: [
-      [noseShoulderX - length * 0.08, -frontWingHalf],
-      [noseX + length * 0.04, -noseHalf * 1.2],
-      [noseX + length * 0.11, 0],
-      [noseX + length * 0.04, noseHalf * 1.2],
-      [noseShoulderX - length * 0.08, frontWingHalf],
+      [splitterRearX, -splitterHalf * 0.9],
+      [noseBaseX - length * 0.02, -noseBaseHalf * 0.98],
+      [noseChineX + length * 0.02, -noseChineHalf * 0.8],
+      [splitterTipX, -noseHalf * 0.16],
+      [splitterTipX + length * 0.04, 0],
+      [splitterTipX, noseHalf * 0.16],
+      [noseChineX + length * 0.02, noseChineHalf * 0.8],
+      [noseBaseX - length * 0.02, noseBaseHalf * 0.98],
+      [splitterRearX, splitterHalf * 0.9],
     ],
     rearWing: [
-      [rearWingX - length * 0.08, -rearWingHalf],
-      [rearWingX + length * 0.03, -rearWingHalf * 0.82],
-      [rearWingX + length * 0.03, rearWingHalf * 0.82],
-      [rearWingX - length * 0.08, rearWingHalf],
+      [tailPlaneX - length * 0.06, -tailPlaneHalf],
+      [tailPlaneX + length * 0.08, -tailPlaneHalf * 0.64],
+      [tailPlaneX + length * 0.16, -tailHalf * 0.14],
+      [tailPlaneX + length * 0.16, tailHalf * 0.14],
+      [tailPlaneX + length * 0.08, tailPlaneHalf * 0.64],
+      [tailPlaneX - length * 0.06, tailPlaneHalf],
     ],
     dorsalFin: [
       [engineCoverRearX + length * 0.08, 0],
-      [cockpitFrontX + length * 0.02, 0],
+      [noseBaseX - length * 0.04, 0],
     ],
     wheelCapsules: [
-      { x: rearAxleX, y: -wheelOffsetY, length: wheelLength, width: wheelWidth },
-      { x: rearAxleX, y: wheelOffsetY, length: wheelLength, width: wheelWidth },
-      { x: frontAxleX, y: -wheelOffsetY, length: wheelLength * 0.96, width: wheelWidth * (0.92 + grip * 0.14) },
-      { x: frontAxleX, y: wheelOffsetY, length: wheelLength * 0.96, width: wheelWidth * (0.92 + grip * 0.14) },
+      { x: rearAxleX, y: -wheelTrackHalf, length: wheelLength, width: wheelWidth },
+      { x: rearAxleX, y: wheelTrackHalf, length: wheelLength, width: wheelWidth },
+      { x: frontAxleX, y: -wheelTrackHalf, length: wheelLength * 0.94, width: wheelWidth * (0.9 + grip * 0.12) },
+      { x: frontAxleX, y: wheelTrackHalf, length: wheelLength * 0.94, width: wheelWidth * (0.9 + grip * 0.12) },
     ],
     headlights: [
-      { x: noseX + length * 0.01, y: -noseHalf * 1.3, w: 11, h: 3 },
-      { x: noseX + length * 0.01, y: noseHalf * 0.98, w: 11, h: 3 },
+      { x: noseChineX + length * 0.01, y: -noseChineHalf * 0.84, w: 12, h: 3 },
+      { x: noseChineX + length * 0.01, y: noseChineHalf * 0.64, w: 12, h: 3 },
     ],
     taillights: [
-      { x: tailX + length * 0.01, y: -rearCoreHalf * 0.64, w: 8, h: 3 },
-      { x: tailX + length * 0.01, y: rearCoreHalf * 0.48, w: 8, h: 3 },
+      { x: tailX + length * 0.06, y: -rearHaunchHalf * 0.36, w: 10, h: 3 },
+      { x: tailX + length * 0.06, y: rearHaunchHalf * 0.18, w: 10, h: 3 },
+    ],
+    accentLines: [
+      [
+        [rearHaunchX + length * 0.1, -rearHaunchHalf * 0.26],
+        [shoulderX - length * 0.08, -shoulderHalf * 0.18],
+        [noseChineX - length * 0.02, -noseChineHalf * 0.08],
+      ],
+      [
+        [rearHaunchX + length * 0.1, rearHaunchHalf * 0.26],
+        [shoulderX - length * 0.08, shoulderHalf * 0.18],
+        [noseChineX - length * 0.02, noseChineHalf * 0.08],
+      ],
+      [
+        [cockpitRearX + length * 0.08, 0],
+        [cockpitFrontX + length * 0.02, 0],
+        [noseBaseX + length * 0.02, 0],
+      ],
     ],
   };
 }
@@ -2458,11 +2517,14 @@ function drawCarHighlights(design, accentColor, parts) {
     ctx.lineTo(design.dorsalFin[1][0], design.dorsalFin[1][1]);
     ctx.stroke();
   }
-  ctx.beginPath();
-  ctx.moveTo(design.length * 0.08, -design.width * 0.1);
-  ctx.lineTo(design.length * 0.42, 0);
-  ctx.lineTo(design.length * 0.08, design.width * 0.1);
-  ctx.stroke();
+  for (const line of design.accentLines || []) {
+    ctx.beginPath();
+    line.forEach((point, index) => {
+      if (index === 0) ctx.moveTo(point[0], point[1]);
+      else ctx.lineTo(point[0], point[1]);
+    });
+    ctx.stroke();
+  }
 }
 
 function drawDestroyedCar(car) {
@@ -2877,38 +2939,55 @@ function drawTrail(car) {
       },
     });
   }
+  if (ribbon.length < 2) return;
   const boostMix = clamp(Math.max(car.boostTimer || 0, car.slingshotTimer || 0), 0, 1.6);
+  const segmentCount = ribbon.length - 1;
+  const traceTrailSegment = (from, to, scale = 1) => {
+    const fromLeftX = from.center.x + (from.left.x - from.center.x) * scale;
+    const fromLeftY = from.center.y + (from.left.y - from.center.y) * scale;
+    const toLeftX = to.center.x + (to.left.x - to.center.x) * scale;
+    const toLeftY = to.center.y + (to.left.y - to.center.y) * scale;
+    const toRightX = to.center.x + (to.right.x - to.center.x) * scale;
+    const toRightY = to.center.y + (to.right.y - to.center.y) * scale;
+    const fromRightX = from.center.x + (from.right.x - from.center.x) * scale;
+    const fromRightY = from.center.y + (from.right.y - from.center.y) * scale;
+    ctx.beginPath();
+    ctx.moveTo(fromLeftX, fromLeftY);
+    ctx.lineTo(toLeftX, toLeftY);
+    ctx.lineTo(toRightX, toRightY);
+    ctx.lineTo(fromRightX, fromRightY);
+    ctx.closePath();
+  };
   ctx.save();
   ctx.globalCompositeOperation = "screen";
   ctx.globalAlpha = car.isPlayer ? 0.92 : 0.78;
   ctx.shadowBlur = 26 + boostMix * 8;
   ctx.shadowColor = withAlpha(trailColor, 0.34 + boostMix * 0.08);
-  ctx.fillStyle = withAlpha(trailColor, car.isPlayer ? 0.14 + boostMix * 0.04 : 0.1 + boostMix * 0.03);
-  traceRibbon(ribbon);
-  ctx.fill();
+  for (let index = 0; index < segmentCount; index += 1) {
+    const fade = Math.pow((index + 1) / segmentCount, 1.4);
+    ctx.fillStyle = withAlpha(trailColor, fade * (car.isPlayer ? 0.16 + boostMix * 0.04 : 0.11 + boostMix * 0.03));
+    traceTrailSegment(ribbon[index], ribbon[index + 1], 1);
+    ctx.fill();
+  }
   ctx.shadowBlur = 0;
-  ctx.fillStyle = withAlpha(trailColor, car.isPlayer ? 0.34 + boostMix * 0.08 : 0.24 + boostMix * 0.05);
-  const coreRibbon = ribbon.map((point) => ({
-    left: {
-      x: point.center.x + (point.left.x - point.center.x) * 0.42,
-      y: point.center.y + (point.left.y - point.center.y) * 0.42,
-    },
-    right: {
-      x: point.center.x + (point.right.x - point.center.x) * 0.42,
-      y: point.center.y + (point.right.y - point.center.y) * 0.42,
-    },
-  }));
-  traceRibbon(coreRibbon);
-  ctx.fill();
-  ctx.strokeStyle = withAlpha(trailColor, 0.9);
-  ctx.lineWidth = car.isPlayer ? 1.8 : 1.2;
+  for (let index = 0; index < segmentCount; index += 1) {
+    const fade = Math.pow((index + 1) / segmentCount, 1.22);
+    ctx.fillStyle = withAlpha(trailColor, fade * (car.isPlayer ? 0.42 + boostMix * 0.08 : 0.3 + boostMix * 0.05));
+    traceTrailSegment(ribbon[index], ribbon[index + 1], 0.44);
+    ctx.fill();
+  }
   ctx.lineCap = "round";
-  ctx.beginPath();
-  ribbon.forEach((point, index) => {
-    if (index === 0) ctx.moveTo(point.center.x, point.center.y);
-    else ctx.lineTo(point.center.x, point.center.y);
-  });
-  ctx.stroke();
+  for (let index = 0; index < segmentCount; index += 1) {
+    const fade = Math.pow((index + 1) / segmentCount, 1.16);
+    const from = ribbon[index].center;
+    const to = ribbon[index + 1].center;
+    ctx.strokeStyle = withAlpha(trailColor, fade * (0.86 + boostMix * 0.06));
+    ctx.lineWidth = (car.isPlayer ? 0.9 : 0.7) + fade * (car.isPlayer ? 1.05 : 0.72);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
@@ -2949,14 +3028,14 @@ function drawCar(car) {
 
   ctx.fillStyle = "rgba(0,0,0,0.26)";
   ctx.beginPath();
-  ctx.ellipse(0, 7, car.length * 0.76, car.width * 0.84, 0, 0, TAU);
+  ctx.ellipse(0, 7, car.length * 0.76, design.width * 0.38, 0, 0, TAU);
   ctx.fill();
 
   ctx.shadowBlur = 22;
   ctx.shadowColor = withAlpha(accentColor, 0.4);
   ctx.fillStyle = withAlpha(accentColor, 0.14 + (car.isPlayer ? 0.08 : 0.02));
   ctx.beginPath();
-  ctx.ellipse(-car.length * 0.04, 0, car.length * 0.84, car.width * 0.96, 0, 0, TAU);
+  ctx.ellipse(-car.length * 0.02, 0, car.length * 0.84, design.width * 0.44, 0, 0, TAU);
   ctx.fill();
   ctx.shadowBlur = 0;
 
@@ -3492,7 +3571,7 @@ function handleKeyDown(event) {
       togglePause();
       return;
     }
-    if ((key === "arrowleft" || key === "arrowright") && state.mode === "menu" && state.menuStage === "garage" && state.menuView === "home" && canUseMenuHomeShortcut(target)) {
+    if ((key === "arrowleft" || key === "arrowright") && state.mode === "menu" && state.menuStage === "hub" && state.menuScreen === "race" && canUseMenuHomeShortcut(target)) {
       event.preventDefault();
       ui.cycleHomePane(key === "arrowright" ? 1 : -1);
       return;

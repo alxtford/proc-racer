@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+import { clickFirst, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
 
 const outDir = path.resolve("output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -13,7 +14,7 @@ const views = [
     viewport: { width: 1280, height: 720 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
+      await waitForMenuStage(page, "hub");
     },
   },
   {
@@ -21,8 +22,9 @@ const views = [
     viewport: { width: 1280, height: 720 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-      await page.click("#menu-tab-profile");
+      await waitForMenuStage(page, "hub");
+      await clickFirst(page, ["#menu-tab-profile", "#menu-tab-garage"]);
+      await waitForMenuScreen(page, "garage");
     },
   },
   {
@@ -30,9 +32,9 @@ const views = [
     viewport: { width: 1280, height: 720 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-      await page.click("#menu-tab-profile");
-      await page.click("#profile-tab-foundry");
+      await waitForMenuStage(page, "hub");
+      await clickFirst(page, ["#menu-tab-foundry", "#profile-tab-foundry"]);
+      await waitForMenuScreen(page, "foundry");
     },
   },
   {
@@ -40,9 +42,9 @@ const views = [
     viewport: { width: 1280, height: 720 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-      await page.click("#menu-tab-profile");
-      await page.click("#profile-tab-style");
+      await waitForMenuStage(page, "hub");
+      await clickFirst(page, ["#menu-tab-style", "#profile-tab-style"]);
+      await waitForMenuScreen(page, "style");
     },
   },
   {
@@ -50,9 +52,9 @@ const views = [
     viewport: { width: 1280, height: 720 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-      await page.click("#menu-tab-profile");
-      await page.click("#profile-tab-career");
+      await waitForMenuStage(page, "hub");
+      await clickFirst(page, ["#menu-tab-career", "#profile-tab-career"]);
+      await waitForMenuScreen(page, "career");
     },
   },
   {
@@ -60,9 +62,9 @@ const views = [
     viewport: { width: 1280, height: 720 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-      await page.click("#menu-tab-profile");
-      await page.click("#profile-tab-foundry");
+      await waitForMenuStage(page, "hub");
+      await clickFirst(page, ["#menu-tab-foundry", "#profile-tab-foundry"]);
+      await waitForMenuScreen(page, "foundry");
       await page.click("#garage-roll-btn");
       await page.waitForTimeout(2400);
     },
@@ -72,18 +74,9 @@ const views = [
     viewport: { width: 1024, height: 640 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
+      await waitForMenuStage(page, "hub");
       await page.click("#menu-tab-settings");
-    },
-  },
-  {
-    name: "settings-controls-1024x640",
-    viewport: { width: 1024, height: 640 },
-    setup: async (page) => {
-      await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-      await page.click("#menu-tab-settings");
-      await page.click("#settings-tab-controls");
+      await waitForMenuScreen(page, "settings");
     },
   },
   {
@@ -91,7 +84,7 @@ const views = [
     viewport: { width: 800, height: 600 },
     setup: async (page) => {
       await page.click("#start-btn");
-      await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
+      await waitForMenuStage(page, "hub");
     },
   },
 ];
@@ -149,7 +142,7 @@ async function auditView(browser, definition) {
       };
     });
     const visibleCandidates = Array.from(document.querySelectorAll(
-      "#menu .selection-block, #menu .hub-header, #menu .focus-card, #menu .event-card, #menu .car-card, #menu .style-card, #menu .garage-roll-shell, #pause .pause-shell, #results .results-shell",
+      "#menu .menu-tab, #menu .menu-toolbar, #menu .selection-block, #menu .hub-header, #menu .focus-card, #menu .event-card, #menu .car-card, #menu .style-card, #menu .garage-roll-shell, #pause .pause-shell, #results .results-shell",
     )).filter((element) => {
       const style = window.getComputedStyle(element);
       if (style.visibility === "hidden" || style.display === "none" || element.classList.contains("hidden")) return false;
@@ -178,6 +171,7 @@ async function auditView(browser, definition) {
       rootReports,
       overflow,
       menuStage: window.__procRacer?.menuStage || null,
+      menuScreen: window.__procRacer?.menuScreen || null,
       menuView: window.__procRacer?.menuView || null,
       text: window.render_game_to_text ? JSON.parse(window.render_game_to_text()) : null,
     };
