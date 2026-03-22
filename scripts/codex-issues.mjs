@@ -282,7 +282,7 @@ async function fetchOpenIssues(parsed) {
     "--limit",
     "200",
     "--json",
-    "number,title,url,labels,createdAt",
+    "number,title,url,labels,createdAt,updatedAt,comments",
     ...getRepoArgs(parsed),
   ]);
   return JSON.parse(stdout);
@@ -294,10 +294,27 @@ async function fetchIssue(parsed, issueNumber) {
     "view",
     String(issueNumber),
     "--json",
-    "number,title,url,labels,createdAt,body",
+    "number,title,url,labels,createdAt,updatedAt,body,comments",
     ...getRepoArgs(parsed),
   ]);
   return JSON.parse(stdout);
+}
+
+function commentPreview(comment) {
+  return trimTrailing(comment.body ?? "").split("\n")[0] ?? "";
+}
+
+function issueContext(issue) {
+  return {
+    body: issue.body ?? "",
+    comments: (issue.comments ?? []).map((comment) => ({
+      url: comment.url,
+      author: comment.author?.login ?? "unknown",
+      createdAt: comment.createdAt,
+      body: comment.body ?? "",
+      preview: commentPreview(comment),
+    })),
+  };
 }
 
 async function ensureCleanWorktree() {
@@ -468,6 +485,7 @@ function printBoard(issues) {
     console.log(`#${issue.number} ${issue.title}`);
     console.log(`  ${issue.url}`);
     console.log(`  ${labels}`);
+    console.log(`  comments: ${(issue.comments ?? []).length}`);
   }
 }
 
@@ -575,6 +593,8 @@ async function pickNext(parsed) {
   if (!jsonOut(parsed, nextIssue)) {
     console.log(`#${nextIssue.number} ${nextIssue.title}`);
     console.log(nextIssue.url);
+    console.log(`Comments: ${(nextIssue.comments ?? []).length}`);
+    console.log("Before implementation, read the issue body and all issue comments for the latest product direction.");
   }
 }
 
@@ -592,6 +612,7 @@ async function startIssue(parsed) {
       number: issue.number,
       title: issue.title,
       url: issue.url,
+      context: issueContext(issue),
     },
     branch: branchName,
   };
@@ -600,6 +621,7 @@ async function startIssue(parsed) {
     console.log(`#${issue.number} ${issue.title}`);
     console.log(issue.url);
     console.log(branchName);
+    console.log("Read the issue body and comments before implementing so comment-level decisions override stale issue text.");
   }
 }
 
