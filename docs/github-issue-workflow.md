@@ -45,29 +45,33 @@ Every implementation issue should make these things explicit:
 
 If an issue does not have enough information for safe implementation, it should stay `codex:needs-human`.
 
+Issue comments are part of the issue contract. Triage and implementation should treat the latest human comment direction as higher-precedence context than the original issue body when they conflict.
+
 ## Codex Worker Loop
 
 The autonomous worker follows this loop:
 
 1. Select the highest-priority open issue labeled `codex:ready` and not labeled `codex:blocked`, `codex:needs-human`, `status:in-progress`, or `status:has-pr`
-2. Create a branch named `codex/issue-<number>-<slug>`
-3. Add `status:in-progress` to the issue
-4. Implement only that issue
-5. Run the expected validation for the change, with `npm run validate` as the default baseline
-6. Open a real PR that links the issue
-7. Comment on the issue with the PR link and validation summary
-8. Replace `status:in-progress` with `status:has-pr`
-9. If blocked, apply `codex:blocked` or `codex:needs-human` and explain why in the issue
+2. Read the issue body and all current issue comments before deciding implementation scope
+3. Create a branch named `codex/issue-<number>-<slug>`
+4. Add `status:in-progress` to the issue
+5. Implement only that issue, following the latest issue-comment guidance when it narrows or clarifies the scope
+6. Run the expected validation for the change, with `npm run validate` as the default baseline
+7. Open a real PR that links the issue
+8. Comment on the issue with the PR link and validation summary
+9. Replace `status:in-progress` with `status:has-pr`
+10. If blocked, apply `codex:blocked` or `codex:needs-human` and explain why in the issue
 
 ## Triage Loop
 
 Run backlog triage on a regular cadence:
 
 1. Review new issues, TODOs, and validation failures
-2. Create missing tickets for concrete follow-up work
-3. Split oversized `size:L` issues where possible
-4. Apply or correct priority, size, and readiness labels
-5. Keep only genuinely autonomous work under `codex:ready`
+2. Read issue comments before relabeling so follow-up decisions and human answers are reflected in readiness
+3. Create missing tickets for concrete follow-up work
+4. Split oversized `size:L` issues where possible
+5. Apply or correct priority, size, and readiness labels
+6. Keep only genuinely autonomous work under `codex:ready`
 
 ## Helper Script
 
@@ -88,7 +92,7 @@ node scripts/codex-issues.mjs create --title "Tune AI overtake spacing" --body-f
 
 The worker lifecycle commands are:
 
-- `start-next`: select the next `codex:ready` issue, add `status:in-progress`, comment on the issue, and create a `codex/issue-<number>-<slug>` branch from `main`
+- `start-next`: select the next `codex:ready` issue, include the issue body plus current comments in the JSON output, add `status:in-progress`, comment on the issue, and create a `codex/issue-<number>-<slug>` branch from `main`
 - `finish`: stage all current changes, commit them, push the branch, open a real PR, replace `status:in-progress` with `status:has-pr`, and comment on the issue with the PR link and validation summary
 - `block`: remove `status:in-progress`, mark the issue `codex:blocked` or `codex:needs-human`, and explain why in an issue comment
 
@@ -100,10 +104,11 @@ Backlog triage prompt:
 
 ```text
 Review the proc-racer GitHub backlog, TODOs, and recent validation signals. Create missing actionable GitHub issues, split oversized work where useful, and apply the repo's type, priority, size, and Codex readiness labels. Keep anything needing design or product judgment as codex:needs-human.
+Before changing labels or deciding next steps, read both the issue description and its current comments.
 ```
 
 Issue worker prompt:
 
 ```text
-Inspect the proc-racer GitHub issues. Start by running node scripts/codex-issues.mjs start-next --json. Implement only the claimed issue in the local repo. Validate it appropriately. When the work is complete, run node scripts/codex-issues.mjs finish --issue <number> --validation "<commands run>" and include a concise summary if useful. If the work is blocked, run node scripts/codex-issues.mjs block --issue <number> --label codex:blocked or codex:needs-human --reason "<explanation>".
+Inspect the proc-racer GitHub issues. Start by running node scripts/codex-issues.mjs start-next --json. Read the claimed issue body and every current issue comment before deciding implementation scope. Implement only the claimed issue in the local repo. Validate it appropriately. When the work is complete, run node scripts/codex-issues.mjs finish --issue <number> --validation "<commands run>" and include a concise summary if useful. If the work is blocked, run node scripts/codex-issues.mjs block --issue <number> --label codex:blocked or codex:needs-human --reason "<explanation>".
 ```
