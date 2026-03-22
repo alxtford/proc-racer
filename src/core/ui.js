@@ -12,14 +12,18 @@ import {
   isGarageSlotFilled,
 } from "./garage.js";
 import { CONTROL_DEFAULTS, CONTROL_LABELS } from "./controls.js";
-import { getCurrencyBalance } from "./economy.js";
+import { COURSE_REROLL_COST, getCurrencyBalance } from "./economy.js";
 import { ensureStyleLocker, getEquippedCosmeticDefs, isCosmeticOwned } from "./styleLocker.js";
 import { createKey, formatTime } from "./utils.js";
 import { BIOME_DEFS, MODIFIER_DEFS, PICKUP_DEFS } from "../data/content.js";
 import { COSMETIC_DEFS, COSMETIC_SLOTS, getCosmeticsBySlot } from "../data/cosmetics.js";
 
-const COURSE_COPY_LIMIT = 88;
-const TOOLTIP_DELAY_MS = 3000;
+const COURSE_COPY_LIMIT = 72;
+const HEADER_COPY_LIMIT = 58;
+const TAG_COPY_LIMIT = 52;
+const TOOLTIP_DELAY_MS = 1400;
+const HOME_BOARD_PAGE_SIZE = 4;
+const STYLE_PAGE_SIZE = 2;
 
 function createRefs() {
   return {
@@ -56,7 +60,6 @@ function createRefs() {
     pickupChip: document.getElementById("hud-pickup-chip"),
     assistChip: document.getElementById("hud-assist-chip"),
     slipstreamChip: document.getElementById("hud-slipstream-chip"),
-    ghostChip: document.getElementById("hud-ghost-chip"),
     pause: document.getElementById("pause"),
     pauseShell: document.querySelector(".pause-shell"),
     pauseTitle: document.getElementById("pause-title"),
@@ -78,9 +81,21 @@ function createRefs() {
     resultsNext: document.getElementById("results-next"),
     resultsMedal: document.getElementById("results-medal"),
     resultsPlace: document.getElementById("results-place"),
+    resultsPocketTime: document.getElementById("results-pocket-time"),
+    resultsPocketDelta: document.getElementById("results-pocket-delta"),
+    resultsPocketWallet: document.getElementById("results-pocket-wallet"),
+    resultsPocketReplay: document.getElementById("results-pocket-replay"),
+    resultsTabSummary: document.getElementById("results-tab-summary"),
+    resultsTabTiming: document.getElementById("results-tab-timing"),
+    resultsTabField: document.getElementById("results-tab-field"),
+    resultsPaneSummary: document.getElementById("results-pane-summary"),
+    resultsPaneTiming: document.getElementById("results-pane-timing"),
+    resultsPaneField: document.getElementById("results-pane-field"),
+    resultsGrid: document.querySelector(".results-grid"),
     resultsStats: document.getElementById("results-stats"),
+    resultsLaps: document.getElementById("results-laps"),
     resultsGoals: document.getElementById("results-goals"),
-    resultsProgress: document.getElementById("results-progress"),
+    resultsClassification: document.getElementById("results-classification"),
     resultsRetry: document.getElementById("results-retry-btn"),
     resultsMenu: document.getElementById("results-menu-btn"),
     eventList: document.getElementById("event-list"),
@@ -96,10 +111,16 @@ function createRefs() {
     heroReplayCopy: document.getElementById("hero-replay-copy"),
     heroDailyCopy: document.getElementById("hero-daily-copy"),
     eventFocusBadge: document.getElementById("event-focus-badge"),
+    boardRerollInfoBtn: document.getElementById("board-reroll-info-btn"),
+    boardRerollBtn: document.getElementById("board-reroll-btn"),
     eventFocusTitle: document.getElementById("event-focus-title"),
     eventFocusMeta: document.getElementById("event-focus-meta"),
     eventFocusCopy: document.getElementById("event-focus-copy"),
     eventFocusModifiers: document.getElementById("event-focus-modifiers"),
+    eventCustomSeed: document.getElementById("event-custom-seed"),
+    eventCustomSeedApply: document.getElementById("event-custom-seed-apply"),
+    eventCustomSeedClear: document.getElementById("event-custom-seed-clear"),
+    eventCustomSeedNote: document.getElementById("event-custom-seed-note"),
     eventGhostStatus: document.getElementById("event-ghost-status"),
     eventRewardStatus: document.getElementById("event-reward-status"),
     eventPreview: document.getElementById("event-preview"),
@@ -117,6 +138,15 @@ function createRefs() {
     menuViewHome: document.getElementById("menu-view-home"),
     menuViewProfile: document.getElementById("menu-view-profile"),
     menuViewSettings: document.getElementById("menu-view-settings"),
+    homeTabLaunch: document.getElementById("home-tab-launch"),
+    homeTabBoard: document.getElementById("home-tab-board"),
+    homePaneLaunch: document.getElementById("home-pane-launch"),
+    homePaneBoard: document.getElementById("home-pane-board"),
+    homeBoardPrev: document.getElementById("home-board-prev"),
+    homeBoardPage: document.getElementById("home-board-page"),
+    homeBoardNext: document.getElementById("home-board-next"),
+    homeBoardSelectedTitle: document.getElementById("home-board-selected-title"),
+    homeBoardSelectedMeta: document.getElementById("home-board-selected-meta"),
     profileTabGarage: document.getElementById("profile-tab-garage"),
     profileTabFoundry: document.getElementById("profile-tab-foundry"),
     profileTabStyle: document.getElementById("profile-tab-style"),
@@ -125,6 +155,11 @@ function createRefs() {
     profilePaneFoundry: document.getElementById("profile-pane-foundry"),
     profilePaneStyle: document.getElementById("profile-pane-style"),
     profilePaneCareer: document.getElementById("profile-pane-career"),
+    foundryTabForge: document.getElementById("foundry-tab-forge"),
+    foundryTabReadout: document.getElementById("foundry-tab-readout"),
+    foundryPaneForge: document.getElementById("foundry-pane-forge"),
+    foundryPaneReadout: document.getElementById("foundry-pane-readout"),
+    garageSlotsNote: document.getElementById("garage-slots-note"),
     profileBadge: document.getElementById("profile-badge"),
     profileSummary: document.getElementById("profile-summary"),
     profileRuns: document.getElementById("profile-runs"),
@@ -173,6 +208,118 @@ function formatGain(seconds) {
   return formatTime(Math.abs(seconds));
 }
 
+function formatCourseSeed(seed) {
+  return Number.isFinite(seed) ? `Seed ${Math.round(seed)}` : "Seed --";
+}
+
+function getEventTemplateId(event) {
+  return event?.templateId || event?.id || null;
+}
+
+function supportsCustomCourseSeed(event) {
+  return Boolean(event) && !event.daily;
+}
+
+function normalizeCourseSeed(value) {
+  if (value === "" || value === null || value === undefined) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.min(4294967295, Math.trunc(Math.abs(numeric))));
+}
+
+function getSavedCustomCourseSeed(state, event) {
+  if (!supportsCustomCourseSeed(event)) return null;
+  const templateId = getEventTemplateId(event);
+  if (!templateId) return null;
+  return normalizeCourseSeed(state.save.customCourseSeeds?.[templateId]);
+}
+
+function getDisplayEvent(state, event) {
+  const customSeed = getSavedCustomCourseSeed(state, event);
+  if (customSeed === null) return event;
+  const templateId = getEventTemplateId(event);
+  if (!templateId) return event;
+  if (customSeed === event.seed) {
+    return {
+      ...event,
+      templateId,
+      customSeed: true,
+      customSeedValue: customSeed,
+      customSeedMatchesBoard: true,
+    };
+  }
+  return {
+    ...event,
+    templateId,
+    id: `${templateId}@seed:${customSeed}`,
+    seed: customSeed,
+    customSeed: true,
+    customSeedValue: customSeed,
+    customSeedMatchesBoard: false,
+  };
+}
+
+function getTrackRaceUnits(state) {
+  const checkpointCount = Math.max(1, state.track?.checkpoints?.length || 1);
+  return state.track?.type === "circuit"
+    ? Math.max(1, (state.currentEvent?.laps || 1) * checkpointCount)
+    : Math.max(1, checkpointCount - 1);
+}
+
+function getCarRaceUnits(state, car) {
+  const checkpointCount = Math.max(1, state.track?.checkpoints?.length || 1);
+  const progress = Number.isFinite(car.progress) ? car.progress : 0;
+  if (state.track?.type === "circuit") {
+    return Math.max(0, (Math.max(1, car.currentLap) - 1) * checkpointCount + car.checkpointIndex + progress);
+  }
+  return Math.max(0, car.checkpointIndex + progress);
+}
+
+function getClassifiedFinishTime(state, car, totalUnits, secondsPerUnit) {
+  if (car.finished && Number.isFinite(car.finishMs) && car.finishMs > 0) return car.finishMs;
+  const currentUnits = Math.min(totalUnits, getCarRaceUnits(state, car));
+  const remainingUnits = Math.max(0, totalUnits - currentUnits);
+  const speed = Math.hypot(car.vx || 0, car.vy || 0);
+  const paceScalar = speed > 0 ? Math.max(0.86, Math.min(1.16, 220 / Math.max(speed, 160))) : 1.05;
+  return state.elapsed + remainingUnits * secondsPerUnit * paceScalar;
+}
+
+function buildClassification(state, leaderboard) {
+  if (!leaderboard.length) return [];
+  const totalUnits = getTrackRaceUnits(state);
+  const winner = leaderboard[0];
+  const winnerTime = Number.isFinite(winner?.finishMs) && winner.finishMs > 0
+    ? winner.finishMs
+    : (state.finishTime || state.elapsed || 0);
+  const secondsPerUnit = winnerTime / Math.max(totalUnits, 1);
+  const rows = leaderboard.map((car, index) => ({
+    id: car.id,
+    place: index + 1,
+    label: car.label,
+    player: car.isPlayer,
+    rival: Boolean(car.rival),
+    finished: Boolean(car.finished),
+    classifiedTime: getClassifiedFinishTime(state, car, totalUnits, secondsPerUnit) + (car.finished ? 0 : index * 0.015),
+    bestLapTime: Number.isFinite(car.bestLapTime) ? car.bestLapTime : null,
+  }));
+  return rows.map((row, index) => {
+    const gapToLeader = row.classifiedTime - winnerTime;
+    const ahead = rows[index - 1] || null;
+    const intervalToAhead = ahead ? row.classifiedTime - ahead.classifiedTime : 0;
+    return {
+      ...row,
+      gapToLeader,
+      intervalToAhead,
+      totalDisplay: formatTime(row.classifiedTime),
+      gapDisplay: index === 0 ? "Leader" : formatDelta(gapToLeader),
+      intervalDisplay: index === 0 ? "clear air" : `to P${index} ${formatGain(intervalToAhead)}`,
+      bestLapDisplay: row.bestLapTime !== null ? formatTime(row.bestLapTime) : "--",
+      timingLabel: row.finished ? "finished" : "classified",
+      bestLapLabel: row.bestLapTime !== null ? "best lap" : state.track?.type === "circuit" ? "no clean lap" : "sprint",
+    };
+  });
+}
+
 function formatKeyLabel(key) {
   const map = { arrowleft: "Left", arrowright: "Right", arrowup: "Up", arrowdown: "Down", shift: "Shift", escape: "Esc", " ": "Space" };
   return map[key] || key.toUpperCase();
@@ -184,7 +331,15 @@ function clampCopy(text, limit = COURSE_COPY_LIMIT) {
   const clipped = clean.slice(0, limit + 1);
   const wordBreak = clipped.lastIndexOf(" ");
   const end = wordBreak > limit * 0.62 ? wordBreak : limit;
-  return `${clipped.slice(0, end).trimEnd()}…`;
+  return `${clipped.slice(0, end).trimEnd()}...`;
+}
+
+function clampHeaderCopy(text) {
+  return clampCopy(text, HEADER_COPY_LIMIT);
+}
+
+function clampTagCopy(text) {
+  return clampCopy(text, TAG_COPY_LIMIT);
 }
 
 function describeStat(value) {
@@ -221,10 +376,88 @@ function renderStatTiles(car, compareCar = null) {
   }).join("");
 }
 
+function getPreviewAccent(item, slotOverride = item?.slot) {
+  const slot = slotOverride || "skin";
+  if (slot === "skin") return item?.tint || "#8df7ff";
+  if (slot === "emote") return item?.tint || "#ffb100";
+  return item?.color || "#8df7ff";
+}
+
+function isStarterCosmetic(item) {
+  return Boolean(item?.ownedByDefault && Number(item?.cost || 0) === 0);
+}
+
+function renderCosmeticPreview(item, slotOverride = item?.slot) {
+  const slot = slotOverride || "skin";
+  const accent = getPreviewAccent(item, slot);
+  const badge = item?.badge || "LIVE";
+  const previewId = item?.id || slot;
+  const starter = isStarterCosmetic(item);
+  if (slot === "trail") {
+    return `
+      <div class="style-preview" data-slot="trail" data-preview-id="${previewId}" data-starter="${starter ? "true" : "false"}" style="--preview-accent:${accent};">
+        <div class="style-preview-rig style-preview-rig-drive">
+          <div class="style-preview-car">
+            <span class="style-preview-car-cabin"></span>
+          </div>
+        </div>
+        <div class="style-preview-trail-line"></div>
+        <div class="style-preview-trail-line style-preview-trail-line-b"></div>
+      </div>
+    `;
+  }
+  if (slot === "skid") {
+    return `
+      <div class="style-preview" data-slot="skid" data-preview-id="${previewId}" data-starter="${starter ? "true" : "false"}" style="--preview-accent:${accent};">
+        <div class="style-preview-skid-line"></div>
+        <div class="style-preview-skid-line style-preview-skid-line-b"></div>
+        <div class="style-preview-skid-spark"></div>
+      </div>
+    `;
+  }
+  if (slot === "emote") {
+    return `
+      <div class="style-preview" data-slot="emote" data-preview-id="${previewId}" data-starter="${starter ? "true" : "false"}" style="--preview-accent:${accent};">
+        <div class="style-preview-emote-wrap">
+          <div class="style-preview-emote">${badge}</div>
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="style-preview" data-slot="skin" data-preview-id="${previewId}" data-starter="${starter ? "true" : "false"}" style="--preview-accent:${accent};">
+      <div class="style-preview-rig">
+        <div class="style-preview-car">
+          <span class="style-preview-car-cabin"></span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function medalForResult(result) {
   if (result.place === 1 && result.goalsMet >= 2) return "Gold";
   if (result.place <= 3 || result.goalsMet >= 2) return "Silver";
   return "Steel";
+}
+
+function medalRank(medal) {
+  return medal === "Gold" ? 2 : medal === "Silver" ? 1 : 0;
+}
+
+function getNextMedal(medal) {
+  if (medal === "Steel") return "Silver";
+  if (medal === "Silver") return "Gold";
+  return null;
+}
+
+function getStoredMedal(eventResult) {
+  if (!eventResult) return null;
+  if (eventResult.medal) return eventResult.medal;
+  return medalForResult({
+    place: eventResult.bestPlace || 99,
+    goalsMet: eventResult.goalsMet || 0,
+  });
 }
 
 function getDisplayedEvents(state) {
@@ -261,10 +494,14 @@ function getPrimaryGoal(event) {
 }
 
 function getEventBadge(state, event) {
-  if (event.guided && !state.save.settings.tutorialCompleted) return "Recommended first run";
-  if (event.daily) return "Daily spotlight";
-  if (!state.save.eventResults[event.id]) return "Fresh run";
-  return "Replay ready";
+  const eventResult = getEventResult(state, event);
+  const medal = getStoredMedal(eventResult);
+  if (event.guided && !state.save.settings.tutorialCompleted) return "Recommended opener";
+  if (event.daily) return state.save.daily.bestTime ? "Killline banked" : "Daily killline";
+  if (!eventResult) return "Fresh run";
+  if (medal === "Gold") return getGhostReady(state, event) ? "Ghost revenge" : "Gold line live";
+  if (medal === "Silver") return "Silver banked";
+  return "Steel on board";
 }
 
 function getEventResult(state, event) {
@@ -285,15 +522,15 @@ function getSelectedGarageCar(state) {
 
 function getEventReason(state, event, eventResult) {
   if (event.guided && !state.save.settings.tutorialCompleted) {
-    return clampCopy("Shortest route to pickups, forgiving wreck recovery, and fast restarts.");
+    return clampCopy("Fastest route into pickups, hits, and momentum carry.");
   }
   if (event.daily) {
     return clampCopy(state.save.daily.bestTime
-      ? `Today's seeded challenge. Daily best ${formatTime(state.save.daily.bestTime)} is on the board.`
-      : "Today's seeded challenge. One clean run is enough to bank a time.");
+      ? `Today's fixed gauntlet. Best ${formatTime(state.save.daily.bestTime)} is live.`
+      : "Today's fixed gauntlet. One hard run plants the first time.");
   }
-  if (!eventResult) return clampCopy(`${event.summary} Fresh run with no banked best yet.`);
-  return clampCopy(`${event.summary} Best ${formatTime(eventResult.bestTime)} with ${eventResult.goalsMet}/${event.goals.length} goals cleared.`);
+  if (!eventResult) return clampCopy(`${event.summary} Fresh line. No banked best yet.`);
+  return clampCopy(`${event.summary} Best ${formatTime(eventResult.bestTime)} with ${eventResult.goalsMet}/${event.goals.length} goals.`);
 }
 
 function getCareerStatus(state) {
@@ -304,84 +541,96 @@ function getCareerStatus(state) {
 }
 
 function getDailyStatus(state) {
-  return state.save.daily.bestTime ? `Daily PB ${formatTime(state.save.daily.bestTime)}` : "Today's daily is fresh";
+  const dailyEvent = state.events?.find((event) => event.daily);
+  const dailyResult = dailyEvent ? getEventResult(state, dailyEvent) : null;
+  const dailyMedal = getStoredMedal(dailyResult);
+  return state.save.daily.bestTime
+    ? `Killline ${formatTime(state.save.daily.bestTime)} // ${dailyMedal || "live"}`
+    : "Today's killline is fresh";
 }
 
 function getGhostStatus(state) {
   const flux = getCurrencyBalance(state.save, "flux");
+  const ghostCount = getGhostCount(state);
   if (getRollReadyStatus(state.save)) return `${flux} Flux // pull ready`;
+  if (ghostCount) return `${ghostCount} ghosts // ${flux} Flux`;
   return `${flux} Flux // ${Math.max(0, GARAGE_ROLL_COST - flux)} to roll`;
 }
 
 function getReplayHook(state, event) {
   if (event.daily) {
     return state.save.daily.bestTime
-      ? "Shave the daily best or chase a cleaner medal line."
-      : "Put down the first daily time, then rerun it clean.";
+      ? "Shave the killline best, then hunt a meaner medal line."
+      : "Plant the first killline time, then come back swinging.";
   }
   const eventResult = getEventResult(state, event);
+  const medal = getStoredMedal(eventResult);
   if (!eventResult) return "Fresh run. Bank a first best, then start attacking goals.";
-  if (eventResult.bestPlace > 3) return "Retry for a podium finish before moving deeper into the ladder.";
+  if (medal !== "Gold") return `${medal} is banked. Push for ${getNextMedal(medal)} and a cleaner line.`;
+  if (getGhostReady(state, event)) return "Gold is banked. Run your ghost down and cut deeper.";
   return `Best ${formatTime(eventResult.bestTime)} is live. Beat it or reroll a new one-shot event.`;
 }
 
-function getFocusTags(event, eventResult) {
+function getFocusTags(state, event, eventResult) {
+  const medal = getStoredMedal(eventResult);
   const tags = [
-    event.daily ? "Daily seed" : eventResult?.bestTime ? `Best ${formatTime(eventResult.bestTime)}` : "Fresh run",
+    event.daily
+      ? state.save.daily.bestTime ? `PB ${formatTime(state.save.daily.bestTime)}` : "Killline seed"
+      : medal ? `${medal} banked` : eventResult?.bestTime ? `Best ${formatTime(eventResult.bestTime)}` : "Fresh run",
     `Par ${formatTime(event.parTime)}`,
-    BIOME_DEFS[event.biomeId].name,
+    getGhostReady(state, event) ? "Ghost ready" : BIOME_DEFS[event.biomeId].name,
   ];
   if (event.modifierIds.length) tags.push(MODIFIER_DEFS[event.modifierIds[0]].label);
   return tags;
 }
 
 function getMenuEyebrow(state, event) {
-  if (!state.save.settings.tutorialCompleted) return "Start fast. Learn the loop. Then hit arcade runs.";
-  if (event.daily) return "Daily pressure, forgiving recovery, instant retry.";
-  return "Fast-launch neon racing with clean replay hooks.";
+  return "";
 }
 
 function getMenuIntro(state, event) {
-  if (!state.save.settings.tutorialCompleted) return "Take the guided opener, then jump straight into arcade runs.";
-  if (event.daily) return "Today's daily is live. Bank one clean time, then decide if it is worth another push.";
-  return "Pick a run and launch in seconds.";
+  if (!state.save.settings.tutorialCompleted) return clampHeaderCopy("Take the guided opener, then move into harder kill-runs.");
+  if (event.daily) return clampHeaderCopy("Today's gauntlet is live. Bank a time, then cut deeper.");
+  return clampHeaderCopy("Pick a run and launch in seconds.");
 }
 
 function getLaunchHint(state) {
   return state.save.settings.tutorialCompleted
-    ? "Press Enter to start this run, D for the daily, or Q to remix the event and car for a fresh one-shot race."
-    : "Press Enter to start the recommended run, D for the daily, or Q to skip straight into arcade play.";
+    ? "Press Enter to hit this run, D for the daily gauntlet, Q for an instant remix, or R to reforge the whole board."
+    : "Press Enter to hit the guided run, D for the daily gauntlet, Q to skip straight to the grid, or R to reforge the board.";
 }
 
 function getStartLabel(state, event) {
-  if (!state.save.settings.tutorialCompleted && event.guided) return "Start Guided Run";
-  if (event.daily) return "Start Daily Challenge";
-  return "Start This Race";
+  if (!state.save.settings.tutorialCompleted && event.guided) return "Hit Guided Run";
+  if (event.daily) return "Hit Daily Gauntlet";
+  return "Hit This Run";
 }
 
 function getDailyLabel(state) {
-  return state.save.daily.bestTime ? "Retry Daily PB" : "Run Daily Challenge";
+  return state.save.daily.bestTime ? "Retry Daily Gauntlet" : "Run Daily Gauntlet";
 }
 
 function getQuickLabel(state) {
-  return state.save.settings.tutorialCompleted ? "Instant Remix" : "Skip To Arcade";
+  return state.save.settings.tutorialCompleted ? "Instant Remix" : "Skip To Grid";
 }
 
 function getHeroNextCopy(state, event) {
   if (!state.save.settings.tutorialCompleted && !event.guided) {
-    return "Ignition Class is still the fastest way to learn pickups and recovery before full arcade pressure.";
+    return clampCopy("Breakline Trial is still the fastest way to learn pickups and survive the pressure.");
   }
-  return `${event.name} is a ${getDifficultyLabel(event).toLowerCase()} ${event.type === "circuit" ? "circuit" : "sprint"} built around ${getPrimaryGoal(event).toLowerCase()}.`;
+  return clampCopy(`${event.name} is a ${getDifficultyLabel(event).toLowerCase()} ${event.type === "circuit" ? "circuit" : "sprint"} built around ${getPrimaryGoal(event).toLowerCase()}.`);
 }
 
 function getHeroRecoveryCopy(state) {
   return state.save.settings.tutorialCompleted
-    ? "Scrapes should bleed speed first. Respawns give you pace, shield time, and a real way back into the race."
-    : "Minor hits should cost pace first, not the whole race. The opener is tuned to prove that quickly.";
+    ? clampCopy("Hits should tear pace and bodywork away before they kill the run.")
+    : clampCopy("The opener shows how impacts, shields, and pickups keep the race violent.");
 }
 
 function getHeroDailyCopy(state) {
-  return state.save.daily.bestTime ? `Today's daily best is ${formatTime(state.save.daily.bestTime)}.` : "The daily seed is the cleanest reason to jump back in tomorrow.";
+  return state.save.daily.bestTime
+    ? clampCopy(`Today's gauntlet best is ${formatTime(state.save.daily.bestTime)}.`)
+    : clampCopy("Today's gauntlet is the cleanest reason to come back swinging.");
 }
 
 function getCarLabel(car) {
@@ -395,8 +644,8 @@ function getCarTags(car) {
 }
 
 function getCarGuidance(car) {
-  if (!isGarageSlotFilled(car)) return "Open slot. Keep a Foundry roll here to expand the garage.";
-  return car.guidance || car.description || "Race ready.";
+  if (!isGarageSlotFilled(car)) return clampCopy("Open slot. Keep a Foundry roll here to expand the garage.");
+  return clampCopy(car.guidance || car.description || "Race ready.");
 }
 
 function getMenuOverviewTooltip(state, event) {
@@ -407,11 +656,11 @@ function getMenuOverviewTooltip(state, event) {
     return "Settings are split into two short surfaces so comfort and controls stay readable on one screen.\n\nComfort covers audio, contrast, shake, and assist level. Controls covers binding mode, remaps, and live device state.\n\nEverything updates immediately and persists between sessions.";
   }
   const currentRun = event.daily
-    ? "Daily Challenge uses the same seeded course all day, so the replay value comes from shaving time and cleaning up your line."
+    ? "Daily Gauntlet uses the same seeded course all day, so the value comes from shaving time and carving a harder line."
     : `${event.name} is currently selected. ${getReplayHook(state, event)}`;
   const recommendedPath = !state.save.settings.tutorialCompleted
-    ? "Recommended path: take Guided Run first, then move into Daily Challenge or Instant Remix once the pickup loop makes sense."
-    : "Use Start This Race for the selected event, Daily Challenge for the fixed seed, and Instant Remix when you want a fresh one-shot race immediately.";
+    ? "Recommended path: take Guided Run first, then move into Daily Gauntlet or Instant Remix once the pickup loop makes sense."
+    : "Use Hit This Run for the selected event, Daily Gauntlet for the fixed seed, and Instant Remix when you want a fresh one-shot race immediately.";
   return `${getMenuIntro(state, event)}\n\n${currentRun}\n\n${recommendedPath}\n\n${getLaunchHint(state)}`;
 }
 
@@ -419,8 +668,8 @@ function getEventTooltip(state, event, eventResult) {
   const formatLabel = event.type === "circuit" ? `${event.laps} lap circuit` : "Point-to-point sprint";
   const progressCopy = event.daily
     ? state.save.daily.bestTime
-      ? `Daily best on record: ${formatTime(state.save.daily.bestTime)}.`
-      : "No daily time banked yet."
+      ? `Gauntlet best on record: ${formatTime(state.save.daily.bestTime)}.`
+      : "No gauntlet time banked yet."
     : eventResult?.bestTime
       ? `Best result on record: ${formatTime(eventResult.bestTime)} with ${eventResult.goalsMet}/${event.goals.length} goals cleared.`
       : "Fresh run with no saved best yet.";
@@ -445,8 +694,10 @@ function getGoalProgressText(result) {
 }
 
 function getResultsSubtitle(result) {
-  if (result.previousEventBest === null && !result.event.daily) return `${result.placeLabel} // first result banked // ${getGoalProgressText(result)}`;
-  if (result.newDailyBest) return `${result.placeLabel} // new daily best // ${getGoalProgressText(result)}`;
+  if (result.previousEventBest === null && !result.event.daily) return `${result.placeLabel} // first mark planted // ${getGoalProgressText(result)}`;
+  if (result.medalImproved && result.previousMedal) return `${result.placeLabel} // ${result.medal} forged from ${result.previousMedal.toLowerCase()} // ${getGoalProgressText(result)}`;
+  if (result.rivalBeat && result.rivalName) return `${result.placeLabel} // ${result.rivalName} broken // ${getGoalProgressText(result)}`;
+  if (result.newDailyBest) return `${result.placeLabel} // new gauntlet best // ${getGoalProgressText(result)}`;
   if (result.newEventBest) return `${result.placeLabel} // new best // ${getGoalProgressText(result)}`;
   if (result.deltaToPar <= 0) return `${result.placeLabel} // par beaten ${formatGain(result.deltaToPar)} // ${getGoalProgressText(result)}`;
   return `${result.placeLabel} // par missed ${formatGain(result.deltaToPar)} // ${getGoalProgressText(result)}`;
@@ -454,96 +705,116 @@ function getResultsSubtitle(result) {
 
 function getResultsNote(result) {
   if (result.event.guided && result.wasTutorialRun && !result.tutorialPickupMet) return "You finished the opener, but missed the pickup lesson that completes onboarding.";
-  if (result.event.guided && result.wasTutorialRun) return "Tutorial clear. You used the full loop: pickup, damage tolerance, recovery, and finish.";
-  if (result.previousEventBest === null && !result.event.daily) return "First result banked. Now you have a line, a par time, and goals worth chasing.";
-  if (result.newDailyBest && result.previousDailyBest !== null) return `New daily best by ${formatGain(result.previousDailyBest - result.finishTime)}.`;
-  if (result.newDailyBest) return "First daily time banked.";
+  if (result.event.guided && result.wasTutorialRun) return "Trial cleared. You used the full loop: pickup, impact, wreck pressure, and finish.";
+  if (result.previousEventBest === null && !result.event.daily) return "First mark planted. Now you have a line, a par time, and goals worth chasing.";
+  if (result.medalImproved && result.previousMedal) return `${result.previousMedal} gave way to ${result.medal}. The line is getting sharper.`;
+  if (result.rivalName && result.rivalBeat) return `${result.rivalName} finished behind you. Rival pressure broke your way this time.`;
+  if (result.newDailyBest && result.previousDailyBest !== null) return `New gauntlet best by ${formatGain(result.previousDailyBest - result.finishTime)}.`;
+  if (result.newDailyBest) return "First gauntlet time planted.";
   if (result.newEventBest && result.previousEventBest !== null) return `New event best by ${formatGain(result.previousEventBest - result.finishTime)}.`;
-  if (result.place === 1) return "Win banked. You kept enough pace alive after mistakes to close it out.";
+  if (result.place === 1) return "Win banked. You broke the field and kept the chassis alive long enough to close it out.";
   if (result.deltaToPar <= 0) return `Par beaten by ${formatGain(result.deltaToPar)}.`;
   return `You missed par by ${formatGain(result.deltaToPar)}.`;
 }
 
 function getResultsNext(result) {
-  if (result.event.guided && result.wasTutorialRun && !result.tutorialPickupMet) return "Retry once and use the guided pickup to finish onboarding, or back out and skip straight to arcade play.";
-  if (result.event.guided && result.wasTutorialRun) return "Back out to the menu and run Neon Runoff, or use Skip To Arcade if you want a faster one-shot race now.";
-  if ((result.postRaceFlux || 0) >= GARAGE_ROLL_COST) return "Your Flux Foundry pull is ready. Jump into the garage and crack three new cars.";
-  if (result.place > 3) return "Retry and chase the podium. A cleaner first sector should keep you in the pack.";
+  if (result.event.guided && result.wasTutorialRun && !result.tutorialPickupMet) return "Retry once and use the guided pickup to finish onboarding, or back out and hit the grid.";
+  if (result.event.guided && result.wasTutorialRun) return "Back out to the strike board and run Forgewash, or use Skip To Grid if you want a faster one-shot race now.";
+  if ((result.postRaceFlux || 0) >= GARAGE_ROLL_COST) return "Your Foundry pull is primed. Jump into the garage and crack three new machines.";
+  if (result.nextMedal) return `Retry and push this run from ${result.medal} to ${result.nextMedal}.`;
+  if (result.rivalName && !result.rivalBeat) return `Retry and put ${result.rivalName} behind you before moving on.`;
+  if (result.place > 3) return "Retry and chase the podium. A harder first sector should keep you in the pack.";
   if (result.deltaToPar > 0) return `Retry and beat par ${formatTime(result.event.parTime)} before moving on.`;
-  if (result.event.daily) return "Daily pace is banked. Retry if you think the line still has time left in it.";
+  if (result.event.daily) return "Gauntlet pace is banked. Retry if you think the line still has more violence in it.";
+  if (result.newGhost) return "Ghost updated. Retry now and hunt your own line before it cools.";
   return "Instant remix is ready if you want a fresh seed without extra setup.";
 }
 
 function getResultsRetryLabel(result) {
-  if (result.event.guided && result.wasTutorialRun) return "Retry Tutorial";
-  if (result.event.daily) return "Retry Daily";
+  if (result.event.guided && result.wasTutorialRun) return "Retry Trial";
+  if (result.event.daily) return "Retry Gauntlet";
   return "Instant Retry";
 }
 
 function getResultsMenuLabel(result) {
-  if (result.event.guided && result.wasTutorialRun) return "Pick Arcade Race";
+  if (result.event.guided && result.wasTutorialRun) return "Open Strike Board";
   return "Back To Menu";
 }
 
 function getLiveGoal(state, player) {
   if (state.currentEvent.guided && !state.save.settings.tutorialCompleted) {
-    if (player.pickup && player.pickupUses < 1) return `Goal: use your ${PICKUP_DEFS[player.pickup].label.toLowerCase()}`;
-    if ((player.pickupCollects || 0) < 1 && !player.pickup) return "Goal: drive through the pickup ahead";
-    if (player.destroyedCount < 1) return "Goal: stay moving through contact";
-    return "Goal: respawn clean and finish";
+    if (player.pickup && player.pickupUses < 1) return `Fire ${PICKUP_DEFS[player.pickup].hud}`;
+    if ((player.pickupCollects || 0) < 1 && !player.pickup) return "Take the pickup";
+    if (player.destroyedCount < 1) return "Stay alive through contact";
+    return "Finish the trial";
   }
-  return `Goal: ${getPrimaryGoal(state.currentEvent).toLowerCase()}`;
+  return getPrimaryGoal(state.currentEvent);
 }
 
 function getPressureState(state, player) {
-  const rival = state.cars.find((car) => car.rival);
   if (player.wrongWay) return { text: "Turn back", tone: "danger" };
-  if (rival && rival.place < player.place) return { text: "Rival ahead", tone: "danger" };
-  if (player.place <= Math.min(3, state.cars.length)) return { text: "Podium pace", tone: "good" };
+  if (state.rivalStatus && state.rivalStatus.phase !== "cold") return { text: state.rivalStatus.text, tone: state.rivalStatus.tone };
+  if (player.place === 1) return { text: "Lead", tone: "good" };
+  if (player.place <= Math.min(3, state.cars.length)) return { text: "Podium", tone: "good" };
   return { text: `Chase P${Math.max(1, player.place - 1)}`, tone: "neutral" };
 }
 
 function getAssistState(state, player) {
   const damagePct = player.damage / player.def.durability;
-  if (state.save.settings.assistLevel === "off") return { text: damagePct > 0.65 ? "Manual recovery" : "Manual handling", tone: damagePct > 0.65 ? "danger" : "neutral" };
-  if (player.invuln > 0 || player.shieldTimer > 0) return { text: "Protected", tone: "good" };
-  if (player.assistTimer > 0) return { text: "Recovery push", tone: "good" };
-  if (damagePct > 0.75) return { text: "Critical integrity", tone: "danger" };
-  if (damagePct > 0.45) return { text: "Heavy damage", tone: "danger" };
-  return { text: "Stable line", tone: "neutral" };
+  if (state.save.settings.assistLevel === "off") return { text: damagePct > 0.65 ? "Raw" : "Manual", tone: damagePct > 0.65 ? "danger" : "neutral" };
+  if (player.invuln > 0 || player.shieldTimer > 0) return { text: "Shielded", tone: "good" };
+  if (player.assistTimer > 0) return { text: "Counterpush", tone: "good" };
+  if (damagePct > 0.75) return { text: "Critical", tone: "danger" };
+  if (damagePct > 0.45) return { text: "Damaged", tone: "danger" };
+  return { text: "Steady", tone: "neutral" };
 }
 
-function getFlowState(player) {
+function getFlowState(state, player) {
+  const sectorTag = state.currentSector?.tag || player.sectorTag;
   if (player.wrongWay) return { text: "Turn back", tone: "danger" };
+  if (player.slingshotTimer > 0.12) return { text: "Slingshot", tone: "good" };
+  if (player.draftCharge > 0.72) return { text: "Primed", tone: "good" };
   if (player.slipstream > 0.22) return { text: "Drafting", tone: "good" };
-  if (player.place > 3) return { text: "Close the gap", tone: "neutral" };
-  return { text: "Clean line", tone: "neutral" };
+  if (sectorTag === "hazard") return { text: "Killbox", tone: "danger" };
+  if (sectorTag === "recovery") return { text: "Reset", tone: "good" };
+  if (sectorTag === "technical") return { text: "Technical", tone: "neutral" };
+  if (sectorTag === "high-speed") return { text: "Overdrive", tone: "good" };
+  if (player.place > 3) return { text: "Push", tone: "neutral" };
+  return { text: "Clean", tone: "neutral" };
 }
 
 function getGhostState(state) {
-  if (!state.ghostPlayback) return { text: "Ghost offline", tone: "neutral" };
+  if (!state.ghostPlayback) return { text: "Ghost cold", tone: "neutral" };
   return { text: "Ghost live", tone: "good" };
 }
 
 function getProfileSummaryItems(state) {
   const flux = getCurrencyBalance(state.save, "flux");
   const liveCars = getFilledGarageCars(state.save);
-  const eventResults = Object.values(state.save.eventResults || {});
-  const podiums = eventResults.filter((result) => result.bestPlace <= 3).length;
-  const bestEvent = state.events
-    .filter((event) => state.save.eventResults[event.id]?.bestTime)
-    .sort((a, b) => state.save.eventResults[a.id].bestTime - state.save.eventResults[b.id].bestTime)[0];
-  const averageGarageScore = liveCars.length
-    ? Math.round(liveCars.reduce((sum, car) => sum + getGarageScore(car), 0) / liveCars.length)
-    : 0;
+  const nextPull = Math.max(0, GARAGE_ROLL_COST - flux);
+  const bestScore = liveCars.length ? Math.max(...liveCars.map((car) => getGarageScore(car))) : 0;
+  const ghostCount = getGhostCount(state);
   return [
-    { label: "Wins", value: String(state.save.wins), note: state.save.wins ? "Ladder victories banked" : "No wins banked yet" },
-    { label: "Flux", value: `${flux}`, note: getRollReadyStatus(state.save) ? "Pull is ready right now" : `${Math.max(0, GARAGE_ROLL_COST - flux)} more for the next pull` },
-    { label: "Garage", value: `${averageGarageScore}`, note: `${liveCars.length} live car${liveCars.length === 1 ? "" : "s"} loaded right now` },
-    { label: "Ghosts", value: String(getGhostCount(state)), note: getGhostCount(state) ? "Replay ghosts ready" : "Set your first clean ghost" },
-    { label: "Podiums", value: String(podiums), note: podiums ? "Solid replay foundation" : "First podium still live" },
-    { label: "Daily", value: state.save.daily.bestTime ? formatTime(state.save.daily.bestTime) : "--", note: state.save.daily.bestTime ? "Best daily time" : "Daily not banked yet" },
-    { label: "Best Event", value: bestEvent ? bestEvent.name : "None yet", note: bestEvent ? formatTime(state.save.eventResults[bestEvent.id].bestTime) : "Finish a full arcade event" },
+    {
+      label: "Daily Killline",
+      value: state.save.daily.bestTime ? formatTime(state.save.daily.bestTime) : "Uncut",
+      note: state.save.daily.bestTime ? "Today's best time is already on the board." : "Plant the first gauntlet time today.",
+    },
+    {
+      label: "Foundry Charge",
+      value: flux >= GARAGE_ROLL_COST ? "Roll ready" : `${nextPull} Flux`,
+      note: flux >= GARAGE_ROLL_COST ? "Three capsules can crack right now." : `Next pull opens in ${nextPull} Flux.`,
+    },
+    {
+      label: "Ghost Pack",
+      value: ghostCount ? `${ghostCount} saved` : "No ghosts",
+      note: ghostCount ? "Your best lines are ready to chase." : "Bank cleaner runs to seed rivals and ghosts.",
+    },
+    {
+      label: "Garage Peak",
+      value: bestScore ? `Rating ${bestScore}` : "Starter steel",
+      note: bestScore ? "Highest live chassis rating in the garage." : "Your first real upgrade is still ahead.",
+    },
   ];
 }
 
@@ -556,10 +827,10 @@ function getFoundryInsightItems(state) {
     ? Math.max(...liveCars.map((car) => getGarageScore(car)))
     : 0;
   return [
-    { label: "Calibration", value: `${progression}%`, note: "More race history lifts the pull ceiling, not the floor." },
-    { label: "Wallet", value: `${flux} Flux`, note: getRollReadyStatus(state.save) ? "Enough for a full three-capsule pull." : `${Math.max(0, GARAGE_ROLL_COST - flux)} Flux to the next reveal.` },
-    { label: "Scrap", value: `${scrap}`, note: scrap ? "Ready for cosmetic spend." : "Sell missed pulls to start the style economy." },
-    { label: "Best Slot", value: `${bestScore}`, note: "Current highest live rating in your garage." },
+    { label: "Calibration", value: `${progression}%`, note: "Race history lifts the pull ceiling." },
+    { label: "Wallet", value: `${flux} Flux`, note: getRollReadyStatus(state.save) ? "Full pull ready now." : `${Math.max(0, GARAGE_ROLL_COST - flux)} Flux to the next pull.` },
+    { label: "Scrap", value: `${scrap}`, note: scrap ? "Cosmetic spend is live." : "Missed pulls scrap back here." },
+    { label: "Best Slot", value: `${bestScore}`, note: "Highest active garage rating." },
   ];
 }
 
@@ -571,8 +842,8 @@ function getMenuHeaderContent(state, view, event) {
       title: "Garage",
       eyebrow: liveCars <= 1
         ? "One live starter, two open bays, and a Foundry built to replace it."
-        : "Three garage bays, procedural pulls, and scrap-funded flex.",
-      intro: "Manage your current rides, crack foundry rolls, and turn the misses into style upgrades.",
+        : "Three live bays, procedural pulls, and scrap-funded flex.",
+      intro: clampHeaderCopy("Manage metal, crack Foundry rolls, and turn misses into style."),
       chips: [
         `${liveCars} live / ${state.save.garage.length} slots`,
         `${getCurrencyBalance(state.save, "flux")} Flux`,
@@ -583,8 +854,8 @@ function getMenuHeaderContent(state, view, event) {
   if (view === "settings") {
     return {
       title: "Settings",
-      eyebrow: "Comfort, clarity, and control tuning without burying the race start.",
-      intro: "Keep the setup simple: tune the feel, confirm bindings, then jump straight back into the loop.",
+      eyebrow: "Comfort, clarity, and control tuning without burying the next hit.",
+      intro: clampHeaderCopy("Tune the feel, confirm the bindings, and get straight back to the grid."),
       chips: [
         `${state.save.settings.assistLevel || "standard"} assist`,
         `${volume}% volume${state.save.settings.muted ? " muted" : ""}`,
@@ -595,8 +866,8 @@ function getMenuHeaderContent(state, view, event) {
     };
   }
   return {
-    title: "Race Setup",
-    eyebrow: getMenuEyebrow(state, event),
+    title: "Strike Board",
+    eyebrow: "",
     intro: getMenuIntro(state, event),
     chips: [
       getCareerStatus(state),
@@ -617,10 +888,10 @@ function getRollCallout(state) {
   const openSlots = state.save.garage.filter((car) => !isGarageSlotFilled(car)).length;
   if (flux >= GARAGE_ROLL_COST) {
     return openSlots
-      ? `Foundry hot. ${openSlots} open slot${openSlots === 1 ? "" : "s"} can be filled immediately, but no pull is guaranteed to upgrade your live car.`
-      : "Foundry hot. Crack three procedural cars. Better race history raises the ceiling, but no pull is guaranteed to beat your garage.";
+      ? clampCopy(`Foundry hot. ${openSlots} open slot${openSlots === 1 ? "" : "s"} can be filled immediately.`)
+      : clampCopy("Foundry hot. Crack three cars. Better race history raises the ceiling.");
   }
-  return `Foundry calibration ${progression}%. More race data improves the roll pool. Earn ${GARAGE_ROLL_COST - flux} more Flux to spin again.`;
+  return clampCopy(`Calibration ${progression}%. Earn ${GARAGE_ROLL_COST - flux} more Flux to spin again.`);
 }
 
 function getCosmeticItem(itemId) {
@@ -631,6 +902,25 @@ function getEventUtilityStatus(state, event) {
   if (event.daily) return "Bonus Flux live";
   if (getRollReadyStatus(state.save)) return "Foundry ready";
   return event.modifierIds.includes("rival-pressure") ? "Rival heat live" : `${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to next pull`;
+}
+
+function getBoardRerollLabel(state) {
+  const flux = getCurrencyBalance(state.save, "flux");
+  if (flux >= COURSE_REROLL_COST) return `Reforge Board // ${COURSE_REROLL_COST} Flux`;
+  return `Reforge Board // +${COURSE_REROLL_COST - flux} Flux`;
+}
+
+function getBoardRerollTooltip(state) {
+  const flux = getCurrencyBalance(state.save, "flux");
+  const rerolls = state.save.strikeBoard?.rerolls || 0;
+  const liveSeed = state.save.strikeBoard?.seed || 0;
+  const availability = flux >= COURSE_REROLL_COST
+    ? `You can crack a fresh strike board right now for ${COURSE_REROLL_COST} Flux.`
+    : `Need ${COURSE_REROLL_COST - flux} more Flux to reforge the strike board.`;
+  const archiveCopy = rerolls
+    ? `Current board seed ${String(liveSeed).slice(-6)}. ${rerolls} paid reforge${rerolls === 1 ? "" : "s"} banked on this save.`
+    : "This save is still on the stock strike board. Reforging replaces the current non-daily courses.";
+  return `${availability}\n\nReforging only replaces the strike-board courses. Guided Run and Daily Killline stay intact.\n\n${archiveCopy}`;
 }
 
 function drawTrackPreview(canvas, event) {
@@ -729,19 +1019,24 @@ function drawTrackPreview(canvas, event) {
 
 export function createUi(state, callbacks = {}) {
   const refs = createRefs();
-  const uiState = {
-    menuOpen: true,
-    toastTimer: 0,
-    bannerTimer: 0,
-    tooltipTimer: null,
-    tooltipButton: null,
-    tooltipMode: null,
-    lastMenuStage: null,
-    lastMenuView: null,
-    styleSlot: "skin",
-    profilePane: "garage",
-    settingsPane: "comfort",
-  };
+    const uiState = {
+      menuOpen: true,
+      toastTimer: 0,
+      bannerTimer: 0,
+      tooltipTimer: null,
+      tooltipButton: null,
+      tooltipMode: null,
+      lastMenuStage: null,
+      lastMenuView: null,
+      homePane: "launch",
+      homeBoardPage: 0,
+      styleSlot: "skin",
+      stylePage: 0,
+      profilePane: "garage",
+      foundryPane: "forge",
+      settingsPane: "comfort",
+      resultsPane: "summary",
+    };
   const tooltipButtons = [
     refs.splashOverviewInfo,
     refs.splashRunsInfo,
@@ -749,6 +1044,7 @@ export function createUi(state, callbacks = {}) {
     refs.splashReplayInfo,
     refs.menuOverviewInfo,
     refs.eventInfoBtn,
+    refs.boardRerollInfoBtn,
     refs.carInfoBtn,
     refs.gachaInfoBtn,
     refs.styleInfoBtn,
@@ -815,23 +1111,30 @@ export function createUi(state, callbacks = {}) {
     }, TOOLTIP_DELAY_MS);
   }
 
+  function resetScrollRegion(element) {
+    if (!element) return;
+    element.scrollTop = 0;
+    element.scrollLeft = 0;
+  }
+
   function scaleShell(shell, variableName, padding = 24) {
     if (!shell) return;
     shell.style.setProperty(variableName, "1");
     const availableWidth = Math.max(320, window.innerWidth - padding);
     const availableHeight = Math.max(320, window.innerHeight - padding);
-    const width = shell.scrollWidth || shell.offsetWidth || 1;
-    const height = shell.scrollHeight || shell.offsetHeight || 1;
+    const width = shell.offsetWidth || shell.clientWidth || shell.scrollWidth || 1;
+    const height = shell.offsetHeight || shell.clientHeight || shell.scrollHeight || 1;
     const scale = Math.min(1, availableWidth / width, availableHeight / height);
     shell.style.setProperty(variableName, scale.toFixed(4));
   }
 
   function updateMenuScale() {
-    scaleShell(refs.splashShell, "--splash-scale", 24);
-    scaleShell(refs.menuShell, "--menu-scale", 24);
-    scaleShell(refs.pauseShell, "--pause-scale", 32);
-    scaleShell(refs.resultsShell, "--results-scale", 32);
-    scaleShell(refs.garageRollShell, "--garage-roll-scale", 32);
+    scaleShell(refs.splashShell, "--splash-scale", 18);
+    const menuPadding = state.menuView === "profile" || state.menuView === "settings" ? 8 : 18;
+    scaleShell(refs.menuShell, "--menu-scale", menuPadding);
+    scaleShell(refs.pauseShell, "--pause-scale", 20);
+    scaleShell(refs.resultsShell, "--results-scale", window.innerHeight < 760 ? 14 : 20);
+    scaleShell(refs.garageRollShell, "--garage-roll-scale", 20);
     if (uiState.tooltipButton && !refs.tooltip.classList.contains("hidden")) positionTooltip(uiState.tooltipButton);
   }
 
@@ -851,6 +1154,19 @@ export function createUi(state, callbacks = {}) {
     refs.profileTabFoundry.classList.toggle("selected", nextPane === "foundry");
     refs.profileTabStyle.classList.toggle("selected", nextPane === "style");
     refs.profileTabCareer.classList.toggle("selected", nextPane === "career");
+    if (nextPane === "foundry") showFoundryPane(uiState.foundryPane);
+    resetScrollRegion(refs.menuShell);
+  }
+
+  function showFoundryPane(pane) {
+    const nextPane = pane || uiState.foundryPane || "forge";
+    uiState.foundryPane = nextPane;
+    refs.profilePaneFoundry.dataset.pane = nextPane;
+    refs.foundryPaneForge.classList.toggle("hidden", nextPane !== "forge");
+    refs.foundryPaneReadout.classList.toggle("hidden", nextPane !== "readout");
+    refs.foundryTabForge.classList.toggle("selected", nextPane === "forge");
+    refs.foundryTabReadout.classList.toggle("selected", nextPane === "readout");
+    resetScrollRegion(refs.menuShell);
   }
 
   function showSettingsPane(pane) {
@@ -861,6 +1177,30 @@ export function createUi(state, callbacks = {}) {
     refs.settingsPaneControls.classList.toggle("hidden", nextPane !== "controls");
     refs.settingsTabComfort.classList.toggle("selected", nextPane === "comfort");
     refs.settingsTabControls.classList.toggle("selected", nextPane === "controls");
+    resetScrollRegion(refs.menuShell);
+  }
+
+  function showHomePane(pane) {
+    const nextPane = pane || uiState.homePane || "launch";
+    uiState.homePane = nextPane;
+    refs.menuViewHome.dataset.pane = nextPane;
+    refs.homePaneLaunch.classList.toggle("hidden", nextPane !== "launch");
+    refs.homePaneBoard.classList.toggle("hidden", nextPane !== "board");
+    refs.homeTabLaunch.classList.toggle("selected", nextPane === "launch");
+    refs.homeTabBoard.classList.toggle("selected", nextPane === "board");
+    resetScrollRegion(refs.menuShell);
+  }
+
+  function showResultsPane(pane) {
+    const nextPane = pane || uiState.resultsPane || "summary";
+    uiState.resultsPane = nextPane;
+    refs.results.dataset.pane = nextPane;
+    refs.resultsPaneSummary.classList.toggle("hidden", nextPane !== "summary");
+    refs.resultsPaneTiming.classList.toggle("hidden", nextPane !== "timing");
+    refs.resultsPaneField.classList.toggle("hidden", nextPane !== "field");
+    refs.resultsTabSummary.classList.toggle("selected", nextPane === "summary");
+    refs.resultsTabTiming.classList.toggle("selected", nextPane === "timing");
+    refs.resultsTabField.classList.toggle("selected", nextPane === "field");
   }
 
   function showView(view) {
@@ -873,8 +1213,10 @@ export function createUi(state, callbacks = {}) {
     refs.menuTabHome.classList.toggle("selected", view === "home");
     refs.menuTabProfile.classList.toggle("selected", view === "profile");
     refs.menuTabSettings.classList.toggle("selected", view === "settings");
+    if (view === "home") showHomePane(uiState.homePane);
     if (view === "profile") showProfilePane(uiState.profilePane);
     if (view === "settings") showSettingsPane(uiState.settingsPane);
+    resetScrollRegion(refs.menuShell);
   }
 
   function showMenuStage(stage) {
@@ -885,6 +1227,7 @@ export function createUi(state, callbacks = {}) {
     refs.splashShell.classList.toggle("hidden", !splash);
     refs.menuShell.classList.toggle("hidden", splash);
     refs.menu.dataset.stage = splash ? "splash" : "garage";
+    resetScrollRegion(refs.menuShell);
   }
 
   function setMenuOpen(isOpen) {
@@ -892,7 +1235,10 @@ export function createUi(state, callbacks = {}) {
     refs.menu.classList.toggle("hidden", !isOpen);
     refs.root.classList.toggle("menu-open", isOpen);
     if (!isOpen) dismissTooltip();
-    if (isOpen) updateMenuScale();
+    if (isOpen) {
+      resetScrollRegion(refs.menuShell);
+      updateMenuScale();
+    }
   }
 
   function setPauseOpen(isOpen) {
@@ -905,22 +1251,34 @@ export function createUi(state, callbacks = {}) {
     }
   }
 
-  function showBanner(text, duration = 2) {
+  function showBanner(text, duration = 2, mode = "top") {
     refs.banner.textContent = text;
+    refs.banner.dataset.mode = mode;
+    refs.banner.classList.add("hidden");
+    refs.banner.classList.remove("banner-pop");
+    void refs.banner.offsetWidth;
     refs.banner.classList.remove("hidden");
+    refs.banner.classList.add("banner-pop");
     uiState.bannerTimer = duration;
   }
 
   function showToast(text, tone = "neutral", duration = 1.4) {
     refs.toast.textContent = text;
     refs.toast.dataset.tone = tone;
+    refs.toast.classList.add("hidden");
+    refs.toast.classList.remove("toast-pop");
+    void refs.toast.offsetWidth;
     refs.toast.classList.remove("hidden");
+    refs.toast.classList.add("toast-pop");
     uiState.toastTimer = duration;
   }
 
   function hideResults() {
     refs.results.classList.add("hidden");
     refs.root.classList.remove("results-open");
+    resetScrollRegion(refs.resultsShell);
+    resetScrollRegion(refs.resultsGrid);
+    resetScrollRegion(refs.resultsClassification);
     dismissTooltip();
   }
 
@@ -942,43 +1300,169 @@ export function createUi(state, callbacks = {}) {
       : state.save.settings.controlMode === "custom" ? `Custom bindings${deviceStatus}` : `Hybrid bindings${deviceStatus}`;
   }
 
+  function getHomeBoardPage(displayedEvents, baseEvent) {
+    const pageCount = Math.max(1, Math.ceil(displayedEvents.length / HOME_BOARD_PAGE_SIZE));
+    const selectedIndex = Math.max(0, displayedEvents.findIndex((item) => item.id === baseEvent?.id));
+    const selectedPage = Math.floor(selectedIndex / HOME_BOARD_PAGE_SIZE);
+    uiState.homeBoardPage = Math.max(0, Math.min(pageCount - 1, uiState.homeBoardPage || 0));
+    if (
+      uiState.homePane === "board"
+      && (selectedIndex < uiState.homeBoardPage * HOME_BOARD_PAGE_SIZE
+        || selectedIndex >= (uiState.homeBoardPage + 1) * HOME_BOARD_PAGE_SIZE)
+    ) {
+      uiState.homeBoardPage = selectedPage;
+    }
+    return {
+      pageCount,
+      currentPage: uiState.homePane === "board" ? uiState.homeBoardPage : selectedPage,
+      selectedPage,
+    };
+  }
+
+  function setHomePane(pane) {
+    uiState.homePane = pane;
+    if (pane === "board") uiState.homeBoardPage = 0;
+    syncMenu();
+  }
+
+  function cycleHomePane(direction = 1) {
+    const panes = ["launch", "board"];
+    const currentIndex = panes.indexOf(uiState.homePane);
+    const nextPane = panes[(currentIndex + direction + panes.length) % panes.length];
+    uiState.homePane = nextPane;
+    syncMenu();
+  }
+
+  function setResultsPane(pane) {
+    showResultsPane(pane);
+    updateMenuScale();
+  }
+
+  function cycleResultsPane(direction = 1) {
+    const panes = ["summary", "timing", "field"];
+    const currentIndex = panes.indexOf(uiState.resultsPane);
+    showResultsPane(panes[(currentIndex + direction + panes.length) % panes.length]);
+    updateMenuScale();
+  }
+
   function showResults(result) {
     dismissTooltip();
     refs.results.classList.remove("hidden");
     refs.pause.classList.add("hidden");
     refs.root.classList.add("results-open");
-    updateMenuScale();
-    const shouldCelebrateBest = (result.newEventBest && result.previousEventBest !== null) || (result.newDailyBest && result.previousDailyBest !== null);
-    refs.resultsTitle.textContent = shouldCelebrateBest ? "New Best Locked In" : `${result.event.name} Complete`;
+    showResultsPane("summary");
+    const shouldCelebrateBest = result.medalImproved || (result.newEventBest && result.previousEventBest !== null) || (result.newDailyBest && result.previousDailyBest !== null);
+    const walletFlux = result.postRaceFlux ?? getCurrencyBalance(state.save, "flux");
+    const walletScrap = result.postRaceScrap ?? getCurrencyBalance(state.save, "scrap");
+    const replayPocket = (walletFlux >= GARAGE_ROLL_COST)
+      ? "Foundry pull ready"
+      : result.nextMedal
+        ? `${result.nextMedal} chase live`
+        : result.rivalName && !result.rivalBeat
+          ? `${result.rivalName} ahead`
+          : result.place <= 3
+            ? "Gold line live"
+            : "Podium still live";
+    const deltaPocket = result.place === 1
+      ? result.winnerMargin !== null
+        ? `Won by ${formatGain(result.winnerMargin)}`
+        : "Field cleared"
+      : result.gapToWinner !== null
+        ? `Gap ${formatGain(result.gapToWinner)}`
+        : result.rivalName && !result.rivalBeat
+          ? `${result.rivalName} ahead`
+          : `Par ${formatDelta(result.deltaToPar)}`;
+    refs.resultsTitle.textContent = shouldCelebrateBest
+      ? result.medalImproved ? `${result.medal} Carved` : "New Apex Carved"
+      : `${result.event.name} Complete`;
     refs.resultsSubtitle.textContent = getResultsSubtitle(result);
     refs.resultsNote.textContent = getResultsNote(result);
     refs.resultsNext.textContent = getResultsNext(result);
     refs.resultsMedal.textContent = medalForResult(result);
-    refs.resultsPlace.textContent = `Place ${result.place} / ${result.fieldSize} // ${result.emoteBadge || "LOCKED IN"}`;
+    refs.resultsPlace.textContent = `Place ${result.place} / ${result.fieldSize} // ${formatCourseSeed(result.event?.seed)}`;
+    refs.resultsPocketTime.textContent = formatTime(result.finishTime);
+    refs.resultsPocketDelta.textContent = `${deltaPocket} // ${result.fieldClosed ? (result.emoteBadge || "STEEL SET") : "Projected close"}`;
+    refs.resultsPocketWallet.textContent = `+${result.currencyEarned || 0} Flux`;
+    refs.resultsPocketReplay.textContent = replayPocket;
     refs.resultsStats.innerHTML = [
-      `Time <strong>${formatTime(result.finishTime)}</strong>`,
-      result.previousEventBest !== null ? `Event best <strong>${formatDelta(result.finishTime - result.previousEventBest)}</strong>` : "Event best <strong>first result</strong>",
-      `Par line <strong>${formatDelta(result.deltaToPar)}</strong>`,
-      `Flux earned <strong>+${result.currencyEarned || 0}</strong>`,
-      `Wrecks <strong>${result.destroyedCount}</strong>`,
-      `Pickups used <strong>${result.pickupUses}</strong>`,
-      `Wall hits <strong>${result.wallHits}</strong>`,
+      `Total time <strong>${formatTime(result.finishTime)}</strong>`,
+      result.place === 1
+        ? `Margin <strong>${result.winnerMargin !== null ? formatGain(result.winnerMargin) : "solo run"}</strong>`
+        : `Gap to winner <strong>${result.gapToWinner !== null ? formatGain(result.gapToWinner) : "--"}</strong>`,
+      result.playerBestLap !== null
+        ? `Best lap <strong>${formatTime(result.playerBestLap)}</strong>`
+        : state.currentEvent.type === "circuit"
+          ? "Best lap <strong>no clean mark</strong>"
+          : "Format <strong>one-shot sprint</strong>",
+      result.fieldBestLap?.time !== null && result.fieldBestLap?.time !== undefined
+        ? `Field fastest <strong>${formatTime(result.fieldBestLap.time)}</strong><span class="results-inline">${result.fieldBestLap.player ? "you" : result.fieldBestLap.label}</span>`
+        : result.previousEventBest !== null
+          ? `Best delta <strong>${formatDelta(result.finishTime - result.previousEventBest)}</strong>`
+          : "Best delta <strong>first result</strong>",
+      result.fieldClosed
+        ? `Classification <strong>full field closed</strong>`
+        : `Classification <strong>${result.classifiedCount} / ${result.fieldSize} closed</strong>`,
     ].map((item) => `<div class="results-item">${item}</div>`).join("");
+    refs.resultsLaps.innerHTML = result.playerLapTimes.length
+      ? [
+        ...result.playerLapTimes.map((lapTime, index) => {
+          const delta = result.playerBestLap !== null ? lapTime - result.playerBestLap : 0;
+          const isBestLap = result.playerBestLap !== null && Math.abs(lapTime - result.playerBestLap) < 0.005;
+          return `
+            <div class="results-item ${isBestLap ? "results-item-pass" : ""}">
+              Lap ${index + 1} <strong>${formatTime(lapTime)}</strong>
+              <span class="results-inline">${isBestLap ? "best" : `+${formatTime(Math.max(0, delta))}`}</span>
+            </div>
+          `;
+        }),
+        result.fieldBestLap?.time !== null && result.fieldBestLap?.time !== undefined
+          ? `<div class="results-item">Fastest overall <strong>${formatTime(result.fieldBestLap.time)}</strong><span class="results-inline">${result.fieldBestLap.player ? "you" : result.fieldBestLap.label}</span></div>`
+          : "",
+      ].join("")
+      : [
+        `<div class="results-item">Sprint format <strong>No lap splits</strong></div>`,
+        `<div class="results-item">${result.place === 1 ? "Winning time" : "Your time"} <strong>${formatTime(result.finishTime)}</strong></div>`,
+        `<div class="results-item">Comparison <strong>${result.place === 1 ? (result.winnerMargin !== null ? `won by ${formatGain(result.winnerMargin)}` : "field cleared") : (result.gapToWinner !== null ? `+${formatTime(result.gapToWinner)}` : "leader time pending")}</strong></div>`,
+      ].join("");
     refs.resultsGoals.innerHTML = result.goals.map((goal) => `
       <div class="results-item ${goal.complete ? "results-item-pass" : "results-item-fail"}">
         ${goal.complete ? "PASS" : "MISS"} <strong>${goal.label}</strong>
       </div>
     `).join("");
-    refs.resultsProgress.innerHTML = [
-      result.newDailyBest ? "Daily line <strong>improved</strong>" : result.event.daily ? "Daily line <strong>banked</strong>" : `Ghost <strong>${result.newGhost ? "updated" : result.ghostAvailable ? "ready to chase" : "not set yet"}</strong>`,
-      `Wallet <strong>${result.postRaceFlux ?? getCurrencyBalance(state.save, "flux")} Flux // ${result.postRaceScrap ?? getCurrencyBalance(state.save, "scrap")} Scrap</strong>`,
-      `Replay <strong>${result.place <= 3 ? "medal chase live" : "podium still needed"}</strong>`,
-      `Run count <strong>${result.completions}</strong>`,
-      `Finish emote <strong>${result.emoteName || "Steady Nod"}</strong>`,
-      result.event.daily ? `Daily best <strong>${result.newDailyBest ? "improved" : state.save.daily.bestTime ? formatTime(state.save.daily.bestTime) : "first run"}</strong>` : `Best place <strong>P${result.bestPlace}</strong>`,
-    ].map((item) => `<div class="results-item">${item}</div>`).join("");
+    refs.resultsClassification.innerHTML = `
+      <div class="classification-head">
+        <div>Pos</div>
+        <div>Driver</div>
+        <div>Total</div>
+        <div>Gap</div>
+        <div>Best</div>
+      </div>
+      ${result.classification.map((entry) => `
+        <div class="classification-row ${entry.player ? "classification-row-player" : ""} ${entry.rival ? "classification-row-rival" : ""}">
+          <div class="classification-cell classification-pos">P${entry.place}</div>
+          <div class="classification-cell classification-driver">
+            <span>${entry.label}</span>
+            ${entry.player ? '<span class="classification-tag">YOU</span>' : entry.rival ? '<span class="classification-tag classification-tag-rival">RIVAL</span>' : ""}
+          </div>
+          <div class="classification-cell classification-stack">
+            <strong>${entry.totalDisplay}</strong>
+            <small>${entry.timingLabel}</small>
+          </div>
+          <div class="classification-cell classification-stack">
+            <strong>${entry.gapDisplay}</strong>
+            <small>${entry.intervalDisplay}</small>
+          </div>
+          <div class="classification-cell classification-stack">
+            <strong>${entry.bestLapDisplay}</strong>
+            <small>${entry.bestLapLabel}</small>
+          </div>
+        </div>
+      `).join("")}
+    `;
     refs.resultsRetry.textContent = getResultsRetryLabel(result);
     refs.resultsMenu.textContent = getResultsMenuLabel(result);
+    resetScrollRegion(refs.resultsShell);
+    updateMenuScale();
   }
 
   function updateTutorial() {
@@ -992,7 +1476,7 @@ export function createUi(state, callbacks = {}) {
     let step = "Launch";
 
     if (state.countdown > 0) {
-      copy = "Clean launch first. The opener is short, forgiving, and built to show how recovery works.";
+      copy = "Clean launch first. The opener is short and built to show how impacts, shields, and pickups change the fight.";
       step = "Start";
     } else if (player.pickup && player.pickupUses < 1) {
       copy = `Use your ${PICKUP_DEFS[player.pickup].label.toLowerCase()} now. One pickup slot keeps the decision simple.`;
@@ -1017,7 +1501,7 @@ export function createUi(state, callbacks = {}) {
     const styleDefs = getEquippedCosmeticDefs(state.save);
     refs.profileBadge.textContent = getRollReadyStatus(state.save) ? "Foundry ready" : "Garage live";
     refs.profileSummary.innerHTML = getProfileSummaryItems(state).map((item) => `
-      <div class="profile-item">
+      <div class="profile-item profile-item-compact">
         <div class="section-label">${item.label}</div>
         <div class="profile-value">${item.value}</div>
         <div class="profile-note">${item.note}</div>
@@ -1027,13 +1511,21 @@ export function createUi(state, callbacks = {}) {
     const recentRuns = state.save.runHistory.slice(0, 3);
     refs.profileRuns.innerHTML = recentRuns.length
       ? recentRuns.map((run) => {
-        const eventName = state.events.find((event) => event.id === run.eventId)?.name || run.eventId;
-        return `<div class="results-item">${eventName} <strong>P${run.place}</strong> <span class="results-inline">${formatTime(run.finishTime)} // +${run.currencyEarned || 0} Flux // ${run.wrecks} wrecks</span></div>`;
+        const normalizedEventId = typeof run.eventId === "string" ? run.eventId.split("@board:")[0] : run.eventId;
+        const eventName = run.eventName
+          || state.events.find((event) => event.id === run.eventId || event.id === normalizedEventId || event.templateId === normalizedEventId)?.name
+          || normalizedEventId
+          || run.eventId;
+        return `<div class="results-item"><strong>${eventName}</strong> <span class="results-inline">P${run.place} // ${formatTime(run.finishTime)} // +${run.currencyEarned || 0} Flux // ${run.wrecks} wrecks</span></div>`;
       }).join("")
-      : `<div class="results-item">No recent runs yet <strong>Start one race</strong></div>`;
+      : [
+        `<div class="results-item"><strong>Daily killline</strong> <span class="results-inline">${state.save.daily.bestTime ? `Beat ${formatTime(state.save.daily.bestTime)}` : "Plant the first gauntlet time"}</span></div>`,
+        `<div class="results-item"><strong>Foundry target</strong> <span class="results-inline">${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to the next pull</span></div>`,
+        `<div class="results-item"><strong>First pressure log</strong> <span class="results-inline">Finish any run to start building the run history.</span></div>`,
+      ].join("");
 
     refs.foundryInsights.innerHTML = getFoundryInsightItems(state).map((item) => `
-      <div class="profile-item">
+      <div class="profile-item profile-item-compact">
         <div class="section-label">${item.label}</div>
         <div class="profile-value">${item.value}</div>
         <div class="profile-note">${item.note}</div>
@@ -1053,42 +1545,65 @@ export function createUi(state, callbacks = {}) {
     refs.styleSlotTabs.querySelectorAll("[data-style-slot]").forEach((button) => {
       button.addEventListener("click", () => {
         uiState.styleSlot = button.dataset.styleSlot;
+        uiState.stylePage = 0;
         renderProfile();
       });
     });
-    refs.equippedStyle.innerHTML = COSMETIC_SLOTS.map((slot) => {
-      const item = styleDefs[slot] || getCosmeticItem(state.save.equippedCosmetics?.[slot]);
-      return `
-        <div class="garage-item">
-          <div class="section-label">${slot}</div>
-          <div class="profile-value">${item?.name || "None"}</div>
-          <div class="profile-note">${item?.description || "No cosmetic equipped."}</div>
-        </div>
-      `;
-    }).join("");
-
     const activeSlot = uiState.styleSlot || "skin";
     const slotItems = getCosmeticsBySlot(activeSlot);
+    const starterCount = slotItems.filter((item) => isStarterCosmetic(item)).length;
+    const stylePageCount = Math.max(1, Math.ceil(slotItems.length / STYLE_PAGE_SIZE));
+    uiState.stylePage = Math.min(uiState.stylePage || 0, stylePageCount - 1);
+    const visibleSlotItems = slotItems.slice(
+      uiState.stylePage * STYLE_PAGE_SIZE,
+      (uiState.stylePage + 1) * STYLE_PAGE_SIZE,
+    );
+    const activeStyleItem = styleDefs[activeSlot] || getCosmeticItem(state.save.equippedCosmetics?.[activeSlot]);
+    refs.equippedStyle.innerHTML = `
+      <div class="garage-item style-equipped-card">
+        ${renderCosmeticPreview(activeStyleItem, activeSlot)}
+        <div class="section-label">${activeSlot} loadout</div>
+        <div class="profile-value">${activeStyleItem?.name || "None"}</div>
+        <div class="profile-note">${activeStyleItem?.description || "No cosmetic equipped for this slot."}</div>
+        <div class="mini-tags">
+          <span class="mini-tag">${isStarterCosmetic(activeStyleItem) ? "Starter issue" : "Locker owned"}</span>
+          <span class="mini-tag">Live</span>
+          <span class="mini-tag">${slotItems.length} options</span>
+        </div>
+      </div>
+    `;
+
     refs.styleShop.innerHTML = `
       <div class="style-slot-group">
         <div class="section-head style-slot-head">
-          <div class="section-label">${activeSlot}</div>
-          <div class="section-note">${slotItems.length} options</div>
+          <div class="section-head-main">
+            <div class="section-label">${activeSlot}</div>
+            <div class="section-note">${slotItems.length} options // ${starterCount} free</div>
+          </div>
+          ${stylePageCount > 1 ? `
+            <div class="section-head-actions">
+              <button class="secondary-btn section-action-btn" data-style-page-nav="-1" type="button" ${uiState.stylePage <= 0 ? "disabled" : ""}>Prev</button>
+              <div class="section-note">Page ${uiState.stylePage + 1} / ${stylePageCount}</div>
+              <button class="secondary-btn section-action-btn" data-style-page-nav="1" type="button" ${uiState.stylePage >= stylePageCount - 1 ? "disabled" : ""}>Next</button>
+            </div>
+          ` : ""}
         </div>
         <div class="style-card-grid">
-          ${slotItems.map((item) => {
+          ${visibleSlotItems.map((item) => {
             const owned = isCosmeticOwned(state.save, item.id);
             const equipped = state.save.equippedCosmetics?.[activeSlot] === item.id;
+            const starter = isStarterCosmetic(item);
             const actionLabel = equipped ? "Equipped" : owned ? "Equip" : `Buy ${item.cost} Scrap`;
             return `
               <button class="style-card${equipped ? " selected" : ""}" data-style-id="${item.id}" data-style-action="${owned ? "equip" : "buy"}" ${equipped ? "disabled" : ""} type="button">
+                ${renderCosmeticPreview(item, activeSlot)}
                 <div class="card-head">
                   <div class="card-title">${item.name}</div>
-                  <div class="card-kicker">${owned ? activeSlot : "Shop"}</div>
+                  <div class="card-kicker">${starter ? "Starter issue" : owned ? activeSlot : "Shop"}</div>
                 </div>
                 <div class="card-meta">${item.description}</div>
                 <div class="mini-tags">
-                  <span class="mini-tag">${owned ? "Owned" : `${item.cost} Scrap`}</span>
+                  <span class="mini-tag">${starter ? "Free" : owned ? "Owned" : `${item.cost} Scrap`}</span>
                   ${equipped ? '<span class="mini-tag">Live</span>' : ""}
                 </div>
                 <div class="style-card-action">${actionLabel}</div>
@@ -1098,6 +1613,13 @@ export function createUi(state, callbacks = {}) {
         </div>
       </div>
     `;
+    refs.styleShop.querySelectorAll("[data-style-page-nav]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const delta = Number(button.dataset.stylePageNav);
+        uiState.stylePage = Math.max(0, Math.min(stylePageCount - 1, (uiState.stylePage || 0) + delta));
+        renderProfile();
+      });
+    });
     refs.styleShop.querySelectorAll(".style-card").forEach((button) => {
       const itemId = button.dataset.styleId;
       const action = button.dataset.styleAction;
@@ -1123,9 +1645,9 @@ export function createUi(state, callbacks = {}) {
   function syncPause() {
     if (!state.player || !state.currentEvent) return;
     refs.pauseTitle.textContent = `${state.currentEvent.name} Paused`;
-    refs.pauseCopy.textContent = "Resume immediately, restart the event, or tune accessibility without losing the run.";
+    refs.pauseCopy.textContent = "Resume, restart, or tweak comfort.";
     refs.pauseGoal.textContent = getLiveGoal(state, state.player);
-    refs.pauseMeta.textContent = `P${state.player.place} // ${state.track.type === "circuit" ? `Lap ${Math.min(state.player.currentLap, state.currentEvent.laps)}/${state.currentEvent.laps}` : `${Math.round((state.player.progress || 0) * 100)}% to finish`} // ${state.player.pickup ? `Holding ${PICKUP_DEFS[state.player.pickup].label}` : "Pickup empty"}`;
+    refs.pauseMeta.textContent = `P${state.player.place} // ${state.track.type === "circuit" ? `Lap ${Math.min(state.player.currentLap, state.currentEvent.laps)}/${state.currentEvent.laps}` : `${Math.round((state.player.progress || 0) * 100)}% to finish`} // ${formatCourseSeed(state.currentEvent.seed)} // ${state.player.pickup ? `Holding ${PICKUP_DEFS[state.player.pickup].label}` : "Pickup empty"}`;
     syncSettingsInputs();
   }
 
@@ -1133,48 +1655,65 @@ export function createUi(state, callbacks = {}) {
     const roll = state.garageRoll;
     refs.garageRollModal.classList.toggle("hidden", !roll);
     refs.root.classList.toggle("garage-roll-open", Boolean(roll));
-    if (!roll) return;
+    if (!roll) {
+      delete refs.garageRollModal.dataset.status;
+      return;
+    }
+    refs.garageRollModal.dataset.status = roll.status;
 
     const revealed = new Set(roll.revealedSlots || []);
     refs.garageRollStatus.textContent = roll.status === "revealed"
       ? `${roll.keptSlots.length || 0} selected // ${roll.offers.length} revealed`
       : `Charging capsules // ${revealed.size}/3 cracked`;
     refs.garageRollGrid.innerHTML = roll.offers.map((offer) => {
-      const currentCar = state.save.garage[offer.slotIndex];
+      const targetSlot = roll.assignments?.[offer.slotIndex] ?? offer.slotIndex;
+      const currentCar = state.save.garage[targetSlot];
       const hasCurrentCar = isGarageSlotFilled(currentCar);
       const isRevealed = revealed.has(offer.slotIndex) || roll.status === "revealed";
       const kept = roll.keptSlots.includes(offer.slotIndex);
+      const compareDelta = offer.score - (hasCurrentCar ? getGarageScore(currentCar) : 0);
       const compareTags = [
-        `Slot ${offer.slotIndex + 1}`,
-        `${offer.deltaScore >= 0 ? "+" : ""}${offer.deltaScore} rating`,
+        `Offer ${offer.slotIndex + 1}`,
+        `Slot ${targetSlot + 1}`,
+        `${compareDelta >= 0 ? "+" : ""}${compareDelta} rating`,
         `${getScrapValue(offer)} Scrap if sold`,
       ];
+      const targetButtons = state.save.garage.map((slotCar, slotIndex) => {
+        const active = kept && targetSlot === slotIndex;
+        const slotLabel = isGarageSlotFilled(slotCar) ? slotCar.name : "Open";
+        return `<button class="garage-roll-target${active ? " selected" : ""}" data-roll-slot="${offer.slotIndex}" data-roll-target="${slotIndex}" type="button">S${slotIndex + 1}<span>${clampTagCopy(slotLabel)}</span></button>`;
+      }).join("");
       return `
         <div class="garage-roll-card${isRevealed ? " revealed" : " hidden-card"}${kept ? " kept" : ""}">
           <div class="garage-roll-card-inner">
             ${isRevealed ? `
               <div class="card-head">
-                <div class="card-title">${offer.name}</div>
-                <div class="card-kicker">${offer.tierLabel}</div>
+                <div>
+                  <div class="card-title">${offer.name}</div>
+                  <div class="card-kicker">${offer.tierLabel}</div>
+                </div>
+                <button class="secondary-btn garage-roll-toggle garage-roll-toggle-head${kept ? " selected" : ""}" data-roll-slot="${offer.slotIndex}" type="button">${kept ? "Keeping" : "Keep"}</button>
               </div>
               <div class="event-meta">${formatCarMeta(offer)}</div>
-              <div class="card-meta">${getCarGuidance(offer)}</div>
-              <div class="mini-tags">${compareTags.map((tag) => `<span class="mini-tag">${tag}</span>`).join("")}</div>
-                <div class="roll-compare-grid">
-                  <div class="roll-compare-panel">
-                    <div class="section-label">Current slot</div>
-                    <div class="roll-compare-title">${hasCurrentCar ? currentCar.name : "Open slot"}</div>
-                    <div class="card-meta">${hasCurrentCar ? formatCarMeta(currentCar) : "Vacant bay. Keep this roll to add another live car."}</div>
-                    <div class="stat-bars compact">${renderStatTiles(currentCar)}</div>
-                  </div>
-                  <div class="roll-compare-panel roll-compare-panel-new">
-                  <div class="section-label">New roll</div>
+              <div class="card-footer">
+                <div class="mini-tags">${compareTags.map((tag) => `<span class="mini-tag">${tag}</span>`).join("")}</div>
+              </div>
+              <div class="roll-target-row">
+                <div class="section-label">Replace slot</div>
+                <div class="garage-roll-targets">${targetButtons}</div>
+              </div>
+              <div class="roll-compare-grid">
+                <div class="roll-compare-panel">
+                  <div class="section-label">Target bay</div>
+                  <div class="roll-compare-title">${hasCurrentCar ? currentCar.name : "Open slot"}</div>
+                  <div class="roll-compare-copy">${hasCurrentCar ? `${formatCarMeta(currentCar)} // ${currentCar.role}` : "Vacant bay. Keep this reveal to activate the slot instantly."}</div>
+                </div>
+                <div class="roll-compare-panel roll-compare-panel-new">
+                  <div class="section-label">Rolled machine</div>
                   <div class="roll-compare-title">${offer.name}</div>
-                  <div class="card-meta">${formatCarMeta(offer)}</div>
                   <div class="stat-bars compact">${renderStatTiles(offer, currentCar)}</div>
                 </div>
               </div>
-              <button class="secondary-btn garage-roll-toggle${kept ? " selected" : ""}" data-roll-slot="${offer.slotIndex}" type="button">${kept ? "Keeping this car" : "Keep this car"}</button>
             ` : `
               <div class="roll-capsule-shell">
                 <div class="roll-capsule-core"></div>
@@ -1187,22 +1726,31 @@ export function createUi(state, callbacks = {}) {
       `;
     }).join("");
     refs.garageRollGrid.querySelectorAll("[data-roll-slot]").forEach((button) => {
+      if (button.dataset.rollTarget) return;
       button.addEventListener("click", () => callbacks.onGarageRollToggle?.(Number(button.dataset.rollSlot)));
+    });
+    refs.garageRollGrid.querySelectorAll("[data-roll-target]").forEach((button) => {
+      button.addEventListener("click", () => callbacks.onGarageRollAssign?.(
+        Number(button.dataset.rollSlot),
+        Number(button.dataset.rollTarget),
+      ));
     });
     const scrapPreview = roll.offers
       .filter((offer) => !roll.keptSlots.includes(offer.slotIndex))
       .reduce((sum, offer) => sum + getScrapValue(offer), 0);
+    const assignedCount = roll.keptSlots.filter((slotIndex) => Number.isInteger(roll.assignments?.[slotIndex])).length;
     refs.garageRollSummary.textContent = roll.status === "revealed"
-      ? `Keep 1, 2, or all 3. Unkept cars are sold for ${scrapPreview} Scrap, and none of the pulls are guaranteed upgrades.`
-      : "The foundry is cracking three procedural cars. Ceiling scales with race history, but the reveals can still spike or whiff.";
-    refs.garageRollConfirmBtn.disabled = roll.status !== "revealed" || !roll.keptSlots.length;
+      ? `Pick what to keep, then choose which slot each car replaces. Unkept cars sell for ${scrapPreview} Scrap.`
+      : "The Foundry is cracking three procedural cars.";
+    refs.garageRollConfirmBtn.disabled = roll.status !== "revealed" || !roll.keptSlots.length || assignedCount !== roll.keptSlots.length;
     refs.garageRollConfirmBtn.textContent = roll.status !== "revealed"
       ? "Revealing..."
       : `Keep ${roll.keptSlots.length} Car${roll.keptSlots.length === 1 ? "" : "s"}`;
   }
 
   function syncMenu() {
-    const event = state.events[state.selectedEventIndex];
+    const baseEvent = state.events[state.selectedEventIndex];
+    const event = getDisplayEvent(state, baseEvent);
     const car = getSelectedGarageCar(state);
     const eventResult = getEventResult(state, event);
     const onboarding = !state.save.settings.tutorialCompleted;
@@ -1216,7 +1764,7 @@ export function createUi(state, callbacks = {}) {
     showMenuStage(state.menuStage || "splash");
 
     refs.hubTitle.textContent = header.title;
-    refs.menuEyebrow.textContent = header.eyebrow;
+    refs.menuEyebrow.textContent = "";
     refs.menuIntro.textContent = header.intro;
     refs.careerStatus.textContent = header.chips[0] || "";
     refs.dailyStatus.textContent = header.chips[1] || "";
@@ -1224,27 +1772,76 @@ export function createUi(state, callbacks = {}) {
     refs.launchBtn.textContent = getStartLabel(state, event);
     refs.dailyBtn.textContent = getDailyLabel(state);
     refs.quickRaceBtn.textContent = getQuickLabel(state);
+    if (refs.boardRerollBtn) {
+      const rerollDisabled = Boolean(state.garageRoll) || getCurrencyBalance(state.save, "flux") < COURSE_REROLL_COST;
+      refs.boardRerollBtn.textContent = getBoardRerollLabel(state);
+      refs.boardRerollBtn.disabled = false;
+      refs.boardRerollBtn.classList.toggle("is-disabled", rerollDisabled);
+      refs.boardRerollBtn.setAttribute("aria-disabled", rerollDisabled ? "true" : "false");
+    }
     refs.launchHint.textContent = getLaunchHint(state);
     refs.eventFormatHero.textContent = getHeroNextCopy(state, event);
     refs.heroRecoveryCopy.textContent = getHeroRecoveryCopy(state);
     refs.heroReplayCopy.textContent = getReplayHook(state, event);
     refs.heroDailyCopy.textContent = getHeroDailyCopy(state);
 
+    const eventMetaText = `${event.guided ? "~1:12" : `~${formatTime(event.parTime)}`} // ${getDifficultyLabel(event)} // ${formatCourseSeed(event.seed)} // Goal: ${getPrimaryGoal(event).toLowerCase()}`;
     refs.eventFocusBadge.textContent = getEventBadge(state, event);
     refs.eventFocusTitle.textContent = event.name;
-    refs.eventFocusMeta.textContent = `${event.guided ? "~1:12" : `~${formatTime(event.parTime)}`} // ${getDifficultyLabel(event)} // Goal: ${getPrimaryGoal(event).toLowerCase()}`;
+    refs.eventFocusMeta.textContent = eventMetaText;
     refs.eventFocusCopy.textContent = getEventReason(state, event, eventResult);
     refs.eventFocusCopy.removeAttribute("title");
+    if (refs.homeBoardSelectedTitle) refs.homeBoardSelectedTitle.textContent = event.name;
+    if (refs.homeBoardSelectedMeta) refs.homeBoardSelectedMeta.textContent = eventMetaText;
     refs.eventFocusModifiers.innerHTML = "";
-    for (const tagLabel of getFocusTags(event, eventResult)) {
+    for (const tagLabel of getFocusTags(state, event, eventResult)) {
       const tag = document.createElement("span");
       tag.className = "tag";
       tag.textContent = tagLabel;
       refs.eventFocusModifiers.appendChild(tag);
     }
-    refs.eventGhostStatus.textContent = getGhostReady(state, event) ? "Ghost ready" : "Ghost offline";
-    refs.eventRewardStatus.textContent = getEventUtilityStatus(state, event);
+    refs.eventGhostStatus.textContent = getGhostReady(state, event) ? "Ghost ready" : "Ghost cold";
+    refs.eventRewardStatus.textContent = event.customSeed
+      ? event.customSeedMatchesBoard ? "Replay seed pinned" : "Custom replay live"
+      : getEventUtilityStatus(state, event);
     drawTrackPreview(refs.eventPreview, event);
+    const customSeedEnabled = supportsCustomCourseSeed(baseEvent);
+    const savedCustomSeed = getSavedCustomCourseSeed(state, baseEvent);
+    if (refs.eventCustomSeed) {
+      refs.eventCustomSeed.disabled = !customSeedEnabled;
+      refs.eventCustomSeed.value = savedCustomSeed !== null ? String(savedCustomSeed) : "";
+      refs.eventCustomSeed.placeholder = customSeedEnabled ? `${event.seed}` : "Daily seed locked";
+    }
+    if (refs.eventCustomSeedApply) {
+      refs.eventCustomSeedApply.disabled = !customSeedEnabled;
+      refs.eventCustomSeedApply.textContent = savedCustomSeed !== null ? "Update Seed" : "Lock Seed";
+    }
+    if (refs.eventCustomSeedClear) {
+      refs.eventCustomSeedClear.disabled = !customSeedEnabled || savedCustomSeed === null;
+    }
+    if (refs.eventCustomSeedNote) {
+      refs.eventCustomSeedNote.textContent = !customSeedEnabled
+        ? "Daily gauntlets stay locked to today's seed."
+        : savedCustomSeed === null
+          ? "Enter a favourite seed to replay this layout exactly. PBs and ghosts will track that line separately when it diverges from the live board."
+          : event.customSeedMatchesBoard
+            ? "Replay seed locked. This one matches the live board now and will stay playable after the board shifts."
+            : "Replay seed locked. This favourite line now runs on its own seed-scoped PB and ghost lane.";
+    }
+    const boardPage = getHomeBoardPage(displayedEvents, baseEvent);
+    if (refs.homeBoardPage) {
+      refs.homeBoardPage.textContent = `Page ${boardPage.currentPage + 1} / ${boardPage.pageCount}`;
+    }
+    if (refs.homeBoardPrev) {
+      const atStart = boardPage.currentPage <= 0;
+      refs.homeBoardPrev.disabled = atStart;
+      refs.homeBoardPrev.classList.toggle("is-disabled", atStart);
+    }
+    if (refs.homeBoardNext) {
+      const atEnd = boardPage.currentPage >= boardPage.pageCount - 1;
+      refs.homeBoardNext.disabled = atEnd;
+      refs.homeBoardNext.classList.toggle("is-disabled", atEnd);
+    }
 
     if (car) {
       refs.carFocusBadge.textContent = `Slot ${getGarageSlotIndex(state.save, car.id) + 1} // ${getCarLabel(car)}`;
@@ -1262,23 +1859,32 @@ export function createUi(state, callbacks = {}) {
     }
 
     refs.eventList.innerHTML = "";
-    displayedEvents.forEach((item) => {
+    const visibleEvents = displayedEvents.slice(
+      boardPage.currentPage * HOME_BOARD_PAGE_SIZE,
+      (boardPage.currentPage + 1) * HOME_BOARD_PAGE_SIZE,
+    );
+    visibleEvents.forEach((item) => {
+      const displayItem = getDisplayEvent(state, item);
       const eventIndex = state.events.findIndex((eventOption) => eventOption.id === item.id);
-      const cardResult = getEventResult(state, item);
+      const cardResult = getEventResult(state, displayItem);
+      const cardMedal = getStoredMedal(cardResult);
       const button = document.createElement("button");
       button.dataset.kind = item.daily ? "daily" : item.guided ? "guided" : "event";
       button.className = `event-card${eventIndex === state.selectedEventIndex ? " selected" : ""}`;
       button.innerHTML = `
         <div class="card-head">
-          <div class="card-title">${item.name}</div>
-          <div class="card-kicker">${getEventBadge(state, item)}</div>
+          <div class="card-title">${displayItem.name}</div>
+          <div class="card-kicker">${getEventBadge(state, displayItem)}</div>
         </div>
-        <div class="event-meta">${item.guided ? "~1:12" : `~${formatTime(item.parTime)}`} // ${getDifficultyLabel(item)}</div>
-        <div class="event-meta">${getPrimaryGoal(item)}</div>
-        <div class="mini-tags">
-          <span class="mini-tag">${cardResult?.bestTime ? `Best ${formatTime(cardResult.bestTime)}` : "Fresh run"}</span>
-          <span class="mini-tag">${item.daily ? "Today" : BIOME_DEFS[item.biomeId].name}</span>
-          ${getGhostReady(state, item) ? '<span class="mini-tag">Ghost</span>' : ""}
+        <div class="event-meta">${displayItem.guided ? "~1:12" : `~${formatTime(displayItem.parTime)}`} // ${getDifficultyLabel(displayItem)}</div>
+        <div class="event-meta">${clampTagCopy(getPrimaryGoal(displayItem))}</div>
+        <div class="card-footer">
+          <div class="mini-tags">
+            <span class="mini-tag">${cardMedal ? `${cardMedal} banked` : cardResult?.bestTime ? `Best ${formatTime(cardResult.bestTime)}` : "Fresh run"}</span>
+            <span class="mini-tag">${displayItem.daily ? "Gauntlet" : BIOME_DEFS[displayItem.biomeId].name}</span>
+            ${displayItem.customSeed ? `<span class="mini-tag">${formatCourseSeed(displayItem.seed)}</span>` : ""}
+            ${getGhostReady(state, displayItem) ? '<span class="mini-tag">Ghost</span>' : ""}
+          </div>
         </div>
       `;
       button.addEventListener("click", () => callbacks.onEventSelect?.(eventIndex));
@@ -1297,11 +1903,12 @@ export function createUi(state, callbacks = {}) {
             <div class="card-kicker">Slot ${slotIndex + 1} // ${getCarLabel(item)}</div>
           </div>
           <div class="card-meta">${formatCarMeta(item)}</div>
-          <div class="stat-bars compact card-stat-bars">${renderStatTiles(item)}</div>
-          <div class="mini-tags">
-            <span class="mini-tag">${item.role}</span>
-            <span class="mini-tag">${getGarageScore(item)} rating</span>
-            ${getCarTags(item).map((trait) => `<span class="mini-tag">${trait}</span>`).join("")}
+          <div class="card-footer">
+            <div class="mini-tags">
+              <span class="mini-tag">${item.role}</span>
+              <span class="mini-tag">${getGarageScore(item)} rating</span>
+              ${getCarTags(item).slice(0, 2).map((trait) => `<span class="mini-tag">${trait}</span>`).join("")}
+            </div>
           </div>
         `
         : `
@@ -1309,11 +1916,13 @@ export function createUi(state, callbacks = {}) {
             <div class="card-title">Open Slot</div>
             <div class="card-kicker">Slot ${slotIndex + 1} // Vacant</div>
           </div>
-          <div class="card-meta">No car is parked here yet. Keep a Foundry roll to turn this bay into a live race slot.</div>
-          <div class="stat-bars compact card-stat-bars">${renderStatTiles(item)}</div>
-          <div class="mini-tags">
-            <span class="mini-tag">Vacant</span>
-            <span class="mini-tag">Foundry</span>
+          <div class="card-meta">Keep a Foundry roll here to activate this bay.</div>
+          <div class="card-footer">
+            <div class="mini-tags">
+              <span class="mini-tag">Vacant</span>
+              <span class="mini-tag">Foundry</span>
+              <span class="mini-tag">Roll ready</span>
+            </div>
           </div>
         `;
       button.addEventListener("click", () => {
@@ -1328,6 +1937,11 @@ export function createUi(state, callbacks = {}) {
     });
 
     refs.garageCurrency.textContent = `${getCurrencyBalance(state.save, "flux")} Flux`;
+    if (refs.garageSlotsNote) {
+      const liveCars = getFilledGarageCars(state.save).length;
+      const openSlots = state.save.garage.length - liveCars;
+      refs.garageSlotsNote.textContent = `${liveCars} live // ${openSlots} open`;
+    }
     refs.gachaRollCopy.textContent = getRollCallout(state);
     refs.garageRollBtn.textContent = `Roll 3 Cars // ${GARAGE_ROLL_COST} Flux`;
     refs.garageRollBtn.disabled = Boolean(state.garageRoll) || getCurrencyBalance(state.save, "flux") < GARAGE_ROLL_COST;
@@ -1336,17 +1950,18 @@ export function createUi(state, callbacks = {}) {
     renderGarageRoll();
     renderBindings();
 
-    refs.splashOverviewInfo.dataset.tooltip = "Built for instant runs: short events, stylish wrecks, forgiving respawns, and fast retries.";
-    refs.splashRunsInfo.dataset.tooltip = "Every event is seeded. Circuits and sprints reshuffle layout, hazards, and pickup pockets while staying readable enough for first-try launches.";
-    refs.splashRecoveryInfo.dataset.tooltip = "Scrapes should cost speed first. Bigger hits shed parts. Full destruction respawns you quickly with protection so one mistake does not end the run.";
-    refs.splashReplayInfo.dataset.tooltip = "Daily seeds, medals, ghosts, and quick remixes give you reasons to jump back in without a long setup flow.";
-    refs.menuOverviewInfo.dataset.tooltip = getMenuOverviewTooltip(state, event);
-    refs.eventInfoBtn.dataset.tooltip = getEventTooltip(state, event, eventResult);
-    refs.carInfoBtn.dataset.tooltip = car ? getCarTooltip(car) : "Garage data is still loading.";
-    refs.gachaInfoBtn.dataset.tooltip = "Flux buys three procedural car rolls at once. Better race history improves the tier pool, but every pull can still miss. Compare each reveal against its matching garage slot, keep any number of them, and sell the rest automatically for Scrap.";
-    refs.styleInfoBtn.dataset.tooltip = "Scrap comes from cars you do not keep. Spend it here on skins, trails, tyre marks, and results emotes. The purchase path is isolated so direct premium buys can slot in later without rebuilding the garage flow.";
-    refs.settingsAudioInfo.dataset.tooltip = "These settings update live. Use volume and mute for quick comfort, reduced shake to calm collisions, high contrast for clearer track reads, and assist level to soften punishment after mistakes.";
-    refs.settingsControlsInfo.dataset.tooltip = "Hybrid mode keeps the default keyboard layout and any live gamepad. Custom mode lets you remap race inputs. Bindings update immediately and persist between sessions.";
+    if (refs.splashOverviewInfo) refs.splashOverviewInfo.dataset.tooltip = "Built for short, violent runs: seeded kill-courses, glowing wrecks, and a Foundry that keeps feeding new metal into the garage.";
+    if (refs.splashRunsInfo) refs.splashRunsInfo.dataset.tooltip = "Every event is seeded. Circuits and sprints reshuffle layout, hazards, and pickup pockets so the next line is never identical.";
+    if (refs.splashRecoveryInfo) refs.splashRecoveryInfo.dataset.tooltip = "Impacts peel parts off the shell, chew through integrity, and turn a bad line into smoking scrap. The goal is drama first, not fragility.";
+    if (refs.splashReplayInfo) refs.splashReplayInfo.dataset.tooltip = "Daily gauntlets, medal pushes, ghosts, and Foundry rolls keep the next run worth taking.";
+    if (refs.menuOverviewInfo) refs.menuOverviewInfo.dataset.tooltip = getMenuOverviewTooltip(state, event);
+    if (refs.eventInfoBtn) refs.eventInfoBtn.dataset.tooltip = getEventTooltip(state, event, eventResult);
+    if (refs.boardRerollInfoBtn) refs.boardRerollInfoBtn.dataset.tooltip = getBoardRerollTooltip(state);
+    if (refs.carInfoBtn) refs.carInfoBtn.dataset.tooltip = car ? getCarTooltip(car) : "Garage data is still loading.";
+    if (refs.gachaInfoBtn) refs.gachaInfoBtn.dataset.tooltip = "Flux buys three procedural car rolls at once. Better race history improves the tier pool, but every pull can still miss. Keep any number of reveals, choose which slot each one replaces, and sell the rest automatically for Scrap.";
+    if (refs.styleInfoBtn) refs.styleInfoBtn.dataset.tooltip = "Scrap comes from cars you do not keep. Spend it here on skins, trails, tyre marks, and results emotes. The purchase path is isolated so direct premium buys can slot in later without rebuilding the garage flow.";
+    if (refs.settingsAudioInfo) refs.settingsAudioInfo.dataset.tooltip = "These settings update live. Use volume and mute for quick comfort, reduced shake to calm collisions, high contrast for clearer track reads, and assist level to soften punishment after mistakes.";
+    if (refs.settingsControlsInfo) refs.settingsControlsInfo.dataset.tooltip = "Hybrid mode keeps the default keyboard layout and any live gamepad. Custom mode lets you remap race inputs. Bindings update immediately and persist between sessions.";
 
     if (uiState.tooltipButton && !refs.tooltip.classList.contains("hidden")) {
       showTooltip(uiState.tooltipButton, uiState.tooltipMode || "click");
@@ -1375,20 +1990,17 @@ export function createUi(state, callbacks = {}) {
     const speed = Math.hypot(player.vx, player.vy);
     refs.speedValue.textContent = String(Math.round(speed)).padStart(3, "0");
     refs.speedFill.style.width = `${Math.min(100, (speed / 420) * 100)}%`;
-    refs.pickupChip.textContent = player.pickup ? `Hold ${PICKUP_DEFS[player.pickup].hud}` : "Pickup empty";
+    refs.pickupChip.textContent = player.pickup ? PICKUP_DEFS[player.pickup].hud : "No pickup";
     refs.pickupChip.dataset.tone = player.pickup || "none";
 
     const assist = getAssistState(state, player);
     refs.assistChip.textContent = assist.text;
     refs.assistChip.dataset.tone = assist.tone;
 
-    const flow = getFlowState(player);
+    const flow = getFlowState(state, player);
     refs.slipstreamChip.textContent = flow.text;
     refs.slipstreamChip.dataset.tone = flow.tone;
 
-    const ghost = getGhostState(state);
-    refs.ghostChip.textContent = ghost.text;
-    refs.ghostChip.dataset.tone = ghost.tone;
     updateTutorial();
     if (!refs.pause.classList.contains("hidden")) syncPause();
   }
@@ -1405,15 +2017,24 @@ export function createUi(state, callbacks = {}) {
   }
 
   function renderGameToText() {
+    const selectedEvent = state.events[state.selectedEventIndex] || null;
+    const displayEvent = selectedEvent ? getDisplayEvent(state, selectedEvent) : null;
     return JSON.stringify({
       coordinateSystem: "world origin near track center, +x right, +y down",
       mode: state.mode,
       menuStage: state.menuStage || "splash",
       menuView: state.menuView || "home",
+      homePane: uiState.homePane,
+      homeBoardPage: uiState.homeBoardPage,
       profilePane: uiState.profilePane,
+      foundryPane: uiState.foundryPane,
+      stylePage: uiState.stylePage,
+      resultsPane: uiState.resultsPane,
       settingsPane: uiState.settingsPane,
       bindingAction: state.bindingAction || null,
-      selectedEvent: state.events[state.selectedEventIndex]?.name || null,
+      selectedEvent: displayEvent?.name || null,
+      selectedEventSeed: displayEvent?.seed ?? null,
+      selectedEventCustomSeed: displayEvent?.customSeedValue ?? null,
       selectedCar: state.selectedCarId,
       wallet: {
         flux: getCurrencyBalance(state.save, "flux"),
@@ -1423,10 +2044,15 @@ export function createUi(state, callbacks = {}) {
         status: state.garageRoll.status,
         keptSlots: state.garageRoll.keptSlots,
         revealedSlots: state.garageRoll.revealedSlots,
+        assignments: state.garageRoll.assignments,
       } : null,
       menuIntro: refs.menuIntro.textContent,
       tooltip: !refs.tooltip.classList.contains("hidden") ? { text: refs.tooltip.textContent, mode: refs.tooltip.dataset.mode || null } : null,
       currentEvent: state.currentEvent ? { name: state.currentEvent.name, type: state.currentEvent.type, seed: state.currentEvent.seed, theme: state.currentEvent.biomeId, laps: state.currentEvent.laps } : null,
+      bannerMode: refs.banner.dataset.mode || "top",
+      trackSystems: state.track ? { surgeStrips: state.track.surgeStrips?.length || 0, hazards: state.hazards?.length || 0, pickups: state.pickups?.length || 0 } : null,
+      currentSector: state.currentSector ? { id: state.currentSector.id, tag: state.currentSector.tag, name: state.currentSector.name } : null,
+      rivalStatus: state.rivalStatus ? { phase: state.rivalStatus.phase, text: state.rivalStatus.text, tone: state.rivalStatus.tone } : null,
       player: state.player ? {
         x: Number(state.player.x.toFixed(1)),
         y: Number(state.player.y.toFixed(1)),
@@ -1439,6 +2065,9 @@ export function createUi(state, callbacks = {}) {
         destroyed: state.player.destroyed,
         respawn: Number(state.player.respawnTimer.toFixed(2)),
         slipstream: Number(state.player.slipstream.toFixed(2)),
+        draftCharge: Number(state.player.draftCharge.toFixed(2)),
+        slingshot: Number(state.player.slingshotTimer.toFixed(2)),
+        rivalHeat: Number(state.player.rivalHeat.toFixed(2)),
       } : null,
       settings: {
         assistLevel: state.save.settings.assistLevel,
@@ -1453,10 +2082,10 @@ export function createUi(state, callbacks = {}) {
         pickup: refs.pickupChip.textContent,
         assist: refs.assistChip.textContent,
         flow: refs.slipstreamChip.textContent,
-        ghost: refs.ghostChip.textContent,
+        ghost: getGhostState(state).text,
       } : null,
       pause: !refs.pause.classList.contains("hidden") ? { goal: refs.pauseGoal.textContent, meta: refs.pauseMeta.textContent } : null,
-      results: !refs.results.classList.contains("hidden") ? { title: refs.resultsTitle.textContent, note: refs.resultsNote.textContent, next: refs.resultsNext.textContent } : null,
+      results: !refs.results.classList.contains("hidden") ? { title: refs.resultsTitle.textContent, note: refs.resultsNote.textContent, next: refs.resultsNext.textContent, pane: uiState.resultsPane } : null,
       leaderboard: state.cars.map((car) => car.label),
       banner: refs.banner.textContent,
       countdown: Number(Math.max(0, state.countdown).toFixed(2)),
@@ -1491,16 +2120,40 @@ export function createUi(state, callbacks = {}) {
   refs.launchBtn.addEventListener("click", () => callbacks.onStartSelected?.());
   refs.dailyBtn.addEventListener("click", () => callbacks.onStartDaily?.());
   refs.quickRaceBtn.addEventListener("click", () => callbacks.onQuickRace?.());
+  refs.boardRerollBtn?.addEventListener("click", () => callbacks.onBoardReroll?.());
+  refs.eventCustomSeedApply?.addEventListener("click", () => callbacks.onCustomCourseSeedApply?.(refs.eventCustomSeed?.value));
+  refs.eventCustomSeedClear?.addEventListener("click", () => callbacks.onCustomCourseSeedClear?.());
+  refs.eventCustomSeed?.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    callbacks.onCustomCourseSeedApply?.(event.currentTarget.value);
+  });
   refs.garageRollBtn?.addEventListener("click", () => callbacks.onGarageRollStart?.());
   refs.garageRollConfirmBtn?.addEventListener("click", () => callbacks.onGarageRollConfirm?.());
   refs.resultsRetry.addEventListener("click", () => callbacks.onRetry?.());
   refs.resultsMenu.addEventListener("click", () => callbacks.onBackToMenu?.());
+  refs.resultsTabSummary.addEventListener("click", () => setResultsPane("summary"));
+  refs.resultsTabTiming.addEventListener("click", () => setResultsPane("timing"));
+  refs.resultsTabField.addEventListener("click", () => setResultsPane("field"));
   refs.pauseResume.addEventListener("click", () => callbacks.onPauseResume?.());
   refs.pauseRetry.addEventListener("click", () => callbacks.onPauseRetry?.());
   refs.pauseMenu.addEventListener("click", () => callbacks.onPauseMenu?.());
   refs.menuTabHome.addEventListener("click", () => callbacks.onMenuViewChange?.("home"));
   refs.menuTabProfile.addEventListener("click", () => callbacks.onMenuViewChange?.("profile"));
   refs.menuTabSettings.addEventListener("click", () => callbacks.onMenuViewChange?.("settings"));
+  refs.homeTabLaunch.addEventListener("click", () => setHomePane("launch"));
+  refs.homeTabBoard.addEventListener("click", () => setHomePane("board"));
+  refs.homeBoardPrev.addEventListener("click", () => {
+    uiState.homePane = "board";
+    uiState.homeBoardPage = Math.max(0, uiState.homeBoardPage - 1);
+    syncMenu();
+  });
+  refs.homeBoardNext.addEventListener("click", () => {
+    uiState.homePane = "board";
+    uiState.homeBoardPage += 1;
+    syncMenu();
+  });
   refs.profileTabGarage.addEventListener("click", () => {
     uiState.profilePane = "garage";
     showProfilePane("garage");
@@ -1519,6 +2172,16 @@ export function createUi(state, callbacks = {}) {
   refs.profileTabCareer.addEventListener("click", () => {
     uiState.profilePane = "career";
     showProfilePane("career");
+    updateMenuScale();
+  });
+  refs.foundryTabForge.addEventListener("click", () => {
+    uiState.foundryPane = "forge";
+    showFoundryPane("forge");
+    updateMenuScale();
+  });
+  refs.foundryTabReadout.addEventListener("click", () => {
+    uiState.foundryPane = "readout";
+    showFoundryPane("readout");
     updateMenuScale();
   });
   refs.settingsTabComfort.addEventListener("click", () => {
@@ -1548,10 +2211,14 @@ export function createUi(state, callbacks = {}) {
 
   return {
     refs,
+    cycleHomePane,
+    cycleResultsPane,
     hideResults,
     renderGameToText,
+    setHomePane,
     setMenuOpen,
     setPauseOpen,
+    setResultsPane,
     showBanner,
     showResults,
     showToast,
@@ -1575,6 +2242,13 @@ export function buildRunSummary(state, leaderboard) {
   const previousGhost = state.save.ghostRuns?.[ghostKey] || null;
   const wasTutorialRun = state.currentEvent.guided && !state.save.settings.tutorialCompleted;
   const selectedCar = getSelectedGarageCar(state);
+  const rival = leaderboard.find((car) => car.rival) || state.cars.find((car) => car.rival) || null;
+  const classification = buildClassification(state, leaderboard);
+  const playerClassification = classification.find((entry) => entry.player) || null;
+  const fieldBestLap = classification
+    .filter((entry) => entry.bestLapTime !== null)
+    .sort((a, b) => a.bestLapTime - b.bestLapTime)[0] || null;
+  const classifiedCount = classification.filter((entry) => entry.finished).length;
 
   const result = {
     event: state.currentEvent,
@@ -1602,6 +2276,21 @@ export function buildRunSummary(state, leaderboard) {
     completions: (previousEventResult?.completions || 0) + 1,
     bestPlace: previousEventResult?.bestPlace ? Math.min(previousEventResult.bestPlace, place) : place,
     projectedScrap: getCurrencyBalance(state.save, "scrap"),
+    playerLapTimes: player.lapTimes.slice(0, state.currentEvent.type === "circuit" ? state.currentEvent.laps : player.lapTimes.length),
+    playerBestLap: Number.isFinite(player.bestLapTime) ? player.bestLapTime : null,
+    playerLastLap: Number.isFinite(player.lastLapTime) ? player.lastLapTime : null,
+    classification,
+    fieldClosed: classifiedCount === classification.length,
+    classifiedCount,
+    gapToWinner: playerClassification && playerClassification.place > 1 ? playerClassification.gapToLeader : null,
+    gapAhead: playerClassification && playerClassification.place > 1 ? playerClassification.intervalToAhead : null,
+    gapBehind: playerClassification && playerClassification.place < classification.length ? classification[playerClassification.place]?.intervalToAhead ?? null : null,
+    winnerMargin: classification[1]?.gapToLeader ?? null,
+    fieldBestLap: fieldBestLap ? {
+      label: fieldBestLap.label,
+      time: fieldBestLap.bestLapTime,
+      player: fieldBestLap.player,
+    } : null,
     saveSnapshot: {
       currency: getCurrencyBalance(state.save, "flux"),
       scrap: getCurrencyBalance(state.save, "scrap"),
@@ -1622,6 +2311,13 @@ export function buildRunSummary(state, leaderboard) {
     }),
   };
   result.goalsMet = result.goals.filter((goal) => goal.complete).length;
+  result.medal = medalForResult(result);
+  result.previousMedal = getStoredMedal(previousEventResult);
+  result.medalImproved = Boolean(result.previousMedal) && medalRank(result.medal) > medalRank(result.previousMedal);
+  result.nextMedal = getNextMedal(result.medal);
+  result.rivalName = rival?.label || null;
+  result.rivalPlace = rival?.place || null;
+  result.rivalBeat = Boolean(rival && place < rival.place);
   result.tutorialPickupMet = result.goals.find((goal) => goal.type === "pickup_use")?.complete ?? false;
   return result;
 }
