@@ -5,7 +5,7 @@ const port = Number.parseInt(process.env.PORT || "4173", 10);
 
 const { server, url } = await listenStaticServer({ host, port });
 
-console.log(`Proc Racer running at ${url}`);
+console.log(`SHARDLINE running at ${url}`);
 
 async function shutdown(exitCode = 0) {
   await closeStaticServer(server);

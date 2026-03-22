@@ -28,6 +28,11 @@ export function createDefaultSave() {
       bestTime: null,
       rewardClaimed: false,
     },
+    strikeBoard: {
+      seed: 0,
+      rerolls: 0,
+    },
+    customCourseSeeds: {},
     runHistory: [],
     ghostRuns: {},
     settings: {
@@ -67,6 +72,8 @@ export function migrateSave(rawSave) {
       ...createDefaultSave(),
       ...rawSave,
       daily: { ...createDefaultSave().daily, ...rawSave.daily },
+      strikeBoard: { ...createDefaultSave().strikeBoard, ...rawSave.strikeBoard },
+      customCourseSeeds: { ...createDefaultSave().customCourseSeeds, ...(rawSave.customCourseSeeds || {}) },
       settings: { ...createDefaultSave().settings, ...rawSave.settings },
     })));
   }
@@ -88,9 +95,11 @@ export function migrateSave(rawSave) {
   migrated.eventResults = rawSave.eventResults || migrated.eventResults;
   migrated.runHistory = rawSave.runHistory || migrated.runHistory;
   migrated.ghostRuns = rawSave.ghostRuns || migrated.ghostRuns;
+  migrated.customCourseSeeds = { ...migrated.customCourseSeeds, ...(rawSave.customCourseSeeds || {}) };
   if (rawSave.dailyBest) {
     migrated.daily.bestTime = rawSave.dailyBest;
   }
+  migrated.strikeBoard = { ...migrated.strikeBoard, ...(rawSave.strikeBoard || {}) };
   return ensureStyleLocker(ensureWallet(ensureGarage(migrated)));
 }
 

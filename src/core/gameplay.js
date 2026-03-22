@@ -49,6 +49,36 @@ function getRaceScore(state, car) {
   return (car.currentLap - 1) * checkpointCount + car.checkpointIndex + (car.progress || 0);
 }
 
+function getRelativeTrackProgress(track, rawT) {
+  if (!track) return 0;
+  if (track.type === "circuit") return ((rawT - (track.startT ?? 0) + 1) % 1 + 1) % 1;
+  const startT = track.startT ?? 0;
+  const finishT = track.finishT ?? 1;
+  return clamp((rawT - startT) / Math.max(0.001, finishT - startT), 0, 1);
+}
+
+function gateSignedDistance(gate, x, y) {
+  const dx = x - gate.x;
+  const dy = y - gate.y;
+  return dx * gate.tangent.x + dy * gate.tangent.y;
+}
+
+function gateCrossTrackOffset(gate, x, y) {
+  const dx = x - gate.x;
+  const dy = y - gate.y;
+  return dx * gate.normal.x + dy * gate.normal.y;
+}
+
+function crossesGateForward(gate, fromX, fromY, toX, toY) {
+  const fromDistance = gateSignedDistance(gate, fromX, fromY);
+  const toDistance = gateSignedDistance(gate, toX, toY);
+  if (fromDistance > 0 || toDistance < 0 || Math.abs(toDistance - fromDistance) < 0.0001) return false;
+  const mix = clamp((-fromDistance) / (toDistance - fromDistance), 0, 1);
+  const crossX = fromX + (toX - fromX) * mix;
+  const crossY = fromY + (toY - fromY) * mix;
+  return Math.abs(gateCrossTrackOffset(gate, crossX, crossY)) <= gate.halfWidth + 18;
+}
+
 function getGamepadValue(state, action) {
   const gamepad = state.gamepad;
   if (!gamepad?.connected) return 0;
@@ -75,17 +105,24 @@ export function createCar(carSource, isPlayer, slot, track, aiProfileId = "stabl
   const customSource = typeof carSource === "object" && carSource !== null;
   const carId = customSource ? (carSource.id || carSource.def?.id || `garage-${slot}`) : carSource;
   const def = customSource ? carSource.def : CAR_DEFS[carId];
-  const label = customSource ? carSource.label || def.name : isPlayer ? "You" : `AI-${slot}`;
-  const offsetT = 0.02 + slot * 0.012;
-  const start = samplePath(track.points, offsetT, track.type === "circuit");
-  const look = samplePath(track.points, offsetT + 0.003, track.type === "circuit");
+  const aiProfile = AI_PROFILE_DEFS[aiProfileId] || AI_PROFILE_DEFS.stable;
+  const label = customSource ? carSource.label || def.name : isPlayer ? "You" : `${aiProfile.label} ${def.name}`;
+  const startTBase = track.startT ?? (track.type === "circuit" ? 0 : 0.03);
+  const startOffset = track.type === "circuit"
+    ? startTBase + 0.018 + slot * 0.012
+    : clamp(startTBase + 0.03 + slot * 0.014, 0, Math.max(startTBase + 0.03, (track.finishT ?? 0.97) - 0.02));
+  const lookOffset = track.type === "circuit" ? startOffset + 0.003 : clamp(startOffset + 0.003, 0, 1);
+  const start = samplePath(track.points, startOffset, track.type === "circuit");
+  const look = samplePath(track.points, lookOffset, track.type === "circuit");
   const dir = Math.atan2(look.y - start.y, look.x - start.x);
   const laneOffset = (slot % 2 === 0 ? -1 : 1) * Math.floor(slot / 2) * 24;
+  const spawnX = start.x + Math.cos(dir + Math.PI / 2) * laneOffset;
+  const spawnY = start.y + Math.sin(dir + Math.PI / 2) * laneOffset;
   return {
     id: `${isPlayer ? "player" : "ai"}-${slot}`,
     label,
-    x: start.x + Math.cos(dir + Math.PI / 2) * laneOffset,
-    y: start.y + Math.sin(dir + Math.PI / 2) * laneOffset,
+    x: spawnX,
+    y: spawnY,
     vx: 0,
     vy: 0,
     angle: dir,
@@ -101,8 +138,12 @@ export function createCar(carSource, isPlayer, slot, track, aiProfileId = "stabl
     isPlayer,
     eventId,
     aiProfileId,
-    aiProfile: AI_PROFILE_DEFS[aiProfileId],
+    aiProfile,
     currentLap: 1,
+    lapStartedAt: 0,
+    lapTimes: [],
+    lastLapTime: null,
+    bestLapTime: null,
     finished: false,
     finishMs: 0,
     checkpointIndex: 0,
@@ -123,6 +164,8 @@ export function createCar(carSource, isPlayer, slot, track, aiProfileId = "stabl
     slipstream: 0,
     driftLevel: 0,
     stuckTimer: 0,
+    offTrackTimer: 0,
+    courseMissTimer: 0,
     wrongWayTimer: 0,
     assistTimer: 0,
     resetCooldown: 0,
@@ -139,6 +182,19 @@ export function createCar(carSource, isPlayer, slot, track, aiProfileId = "stabl
     pickupLatch: false,
     overtakePulse: 0,
     rival: false,
+    aiIntent: isPlayer ? "Hold the line" : "Form up",
+    sectorTag: "high-speed",
+    sectorName: "",
+    packPressure: 0,
+    targetRivalId: null,
+    draftCharge: 0,
+    draftArmed: false,
+    slingshotTimer: 0,
+    stripCooldown: 0,
+    rivalHeat: 0,
+    pathT: startTBase,
+    previousX: spawnX,
+    previousY: spawnY,
     speedTrail: [],
   };
 }
@@ -160,6 +216,10 @@ export function usePickup(ctx, car) {
       if (gap < 190) {
         const strength = (1 - gap / 190) * 18;
         applyDamage(ctx, target, strength, "pulse", strength > 11 ? "heavy" : "scrape");
+        if (target.rival || car.rival) {
+          target.rivalHeat = Math.max(target.rivalHeat, 1.1);
+          car.rivalHeat = Math.max(car.rivalHeat, 0.9);
+        }
         const away = normalize(target.x - car.x, target.y - car.y);
         target.vx += away.x * 140;
         target.vy += away.y * 140;
@@ -248,17 +308,30 @@ export function destroyCar(ctx, car, source = "impact") {
   ctx.bus.emit("wreck", { carId: car.id, player: car.isPlayer, source });
 }
 
-export function respawnCar(ctx, car) {
+export function respawnCar(ctx, car, meta = {}) {
   const assist = car.isPlayer ? getAssistConfig(ctx.state) : null;
-  const nodes = ctx.state.track.safeRespawnNodes.length ? ctx.state.track.safeRespawnNodes : ctx.state.track.checkpoints;
-  const checkpoint = nodes.find((node) => node.index >= ctx.state.track.checkpoints[car.respawnCheckpoint].index) || nodes[car.respawnCheckpoint % nodes.length] || nodes[0];
-  const next = ctx.state.track.checkpoints[(car.respawnCheckpoint + 1) % ctx.state.track.checkpoints.length];
-  const tangent = normalize(next.x - checkpoint.x, next.y - checkpoint.y);
-  car.x = checkpoint.x;
-  car.y = checkpoint.y;
+  const checkpoints = ctx.state.track.checkpoints;
+  const nodes = ctx.state.track.safeRespawnNodes.length ? ctx.state.track.safeRespawnNodes : checkpoints;
+  const targetIndex = clamp(car.respawnCheckpoint, 0, checkpoints.length - 1);
+  const checkpoint = nodes.find((node) => node.index === targetIndex)
+    || nodes.find((node) => node.index > targetIndex)
+    || checkpoints[targetIndex]
+    || nodes[0]
+    || checkpoints[0];
+  const nextIndex = ctx.state.track.type === "circuit"
+    ? (checkpoint.index + 1) % checkpoints.length
+    : Math.min(checkpoints.length - 1, checkpoint.index + 1);
+  const next = checkpoints[nextIndex] || checkpoint;
+  const tangent = Math.hypot(next.x - checkpoint.x, next.y - checkpoint.y) > 0.01
+    ? normalize(next.x - checkpoint.x, next.y - checkpoint.y)
+    : checkpoint.tangent;
+  car.x = checkpoint.x + tangent.x * 20;
+  car.y = checkpoint.y + tangent.y * 20;
   car.vx = tangent.x * 150;
   car.vy = tangent.y * 150;
   car.angle = Math.atan2(tangent.y, tangent.x);
+  car.checkpointIndex = checkpoint.index;
+  car.respawnCheckpoint = checkpoint.index;
   car.destroyed = false;
   car.invuln = assist?.respawnInvuln ?? 2;
   car.boostTimer = 0.9;
@@ -268,7 +341,15 @@ export function respawnCar(ctx, car) {
   car.health = car.def.durability - car.damage;
   car.visibleParts = DEFAULT_PARTS.slice(Math.floor((car.damage / car.def.durability) * 4));
   car.powerPenalty = clamp(car.damage / car.def.durability, 0, 0.22);
-  ctx.bus.emit("respawn", { carId: car.id, player: car.isPlayer });
+  car.pathT = checkpoint.t;
+  car.progress = getRelativeTrackProgress(ctx.state.track, checkpoint.t);
+  car.previousX = car.x;
+  car.previousY = car.y;
+  car.stuckTimer = 0;
+  car.offTrackTimer = 0;
+  car.courseMissTimer = 0;
+  car.wrongWayTimer = 0;
+  ctx.bus.emit("respawn", { carId: car.id, player: car.isPlayer, ...meta });
 }
 
 function getSlipstreamBonus(state, car) {
@@ -289,9 +370,33 @@ function getSlipstreamBonus(state, car) {
   return best;
 }
 
+function updateDraftState(ctx, car, dt, slipstreamBonus, speedForward) {
+  const wasArmed = car.draftArmed;
+  if (slipstreamBonus > 0.18 && speedForward > 120) {
+    car.draftCharge = clamp(car.draftCharge + dt * (0.38 + slipstreamBonus * 0.95 * car.def.slipstreamAffinity), 0, 1.3);
+    if (car.draftCharge > 0.76) car.draftArmed = true;
+  } else {
+    const canFire = car.draftArmed && car.draftCharge > 0.72 && slipstreamBonus < 0.08 && car.throttle > 0.35 && speedForward > 110;
+    if (canFire) {
+      car.slingshotTimer = Math.max(car.slingshotTimer, 0.9 + car.draftCharge * 0.5);
+      car.assistTimer = Math.max(car.assistTimer, 0.32);
+      if (car.isPlayer) ctx.bus.emit("slingshot_fire", { player: true, strength: car.draftCharge });
+      car.draftCharge = 0;
+      car.draftArmed = false;
+    } else {
+      car.draftCharge = Math.max(0, car.draftCharge - dt * (car.isPlayer ? 0.18 : 0.28));
+      if (car.draftCharge < 0.52) car.draftArmed = false;
+    }
+  }
+  if (!wasArmed && car.draftArmed && car.isPlayer) {
+    ctx.bus.emit("slingshot_armed", { player: true });
+  }
+}
+
 function chooseAiLane(ctx, car, pathInfo) {
   let targetLane = 0;
   const score = getRaceScore(ctx.state, car);
+  const sector = getSectorAtProgress(ctx.state.track, pathInfo.t);
   const normal = { x: -pathInfo.tangent.y, y: pathInfo.tangent.x };
   const nearbyCars = ctx.state.cars
     .filter((other) => other.id !== car.id && !other.destroyed)
@@ -302,20 +407,60 @@ function chooseAiLane(ctx, car, pathInfo) {
     })
     .filter((entry) => entry.range < ctx.state.track.width * 1.9)
     .sort((a, b) => a.range - b.range);
+  car.packPressure = nearbyCars.length;
   const ahead = nearbyCars.find((entry) => entry.scoreDelta > 0 && entry.scoreDelta < 1.4);
   const behind = nearbyCars.find((entry) => entry.scoreDelta < 0 && entry.scoreDelta > -1.1);
+  const playerEntry = nearbyCars.find((entry) => entry.other.isPlayer);
+  let intent = sector.tag === "hazard"
+    ? "Thread the killbox"
+    : sector.tag === "technical"
+      ? "Fight the apex"
+      : sector.tag === "recovery"
+        ? "Reset and fire"
+        : "Burn the straight";
+  car.targetRivalId = null;
+  if (car.rival && playerEntry) {
+    car.targetRivalId = playerEntry.other.id;
+    if (playerEntry.scoreDelta > 0 && playerEntry.scoreDelta < 1.35) {
+      const sign = playerEntry.lateralDelta >= 0 ? -1 : 1;
+      targetLane = sign * ctx.state.track.width * 0.2 * (0.82 + car.aiProfile.aggression * 0.85);
+      car.overtakePulse = Math.max(car.overtakePulse, 0.56 + car.aiProfile.aggression * 0.32);
+      intent = `Hunt ${playerEntry.other.label}`;
+    } else if (playerEntry.scoreDelta < 0 && playerEntry.scoreDelta > -1.15) {
+      const sign = playerEntry.lateralDelta >= 0 ? 1 : -1;
+      targetLane = sign * ctx.state.track.width * 0.14 * (0.86 + car.aiProfile.defense * 0.6);
+      intent = `Block ${playerEntry.other.label}`;
+    }
+  }
   if (ahead) {
     const sign = ahead.lateralDelta >= 0 ? -1 : 1;
     targetLane = sign * ctx.state.track.width * 0.18 * (0.72 + car.aiProfile.aggression * 0.65);
     car.overtakePulse = Math.max(car.overtakePulse, 0.36 + car.aiProfile.aggression * 0.26);
+    intent = intent.startsWith("Hunt") ? intent : `Pass ${ahead.other.label}`;
   } else if (behind && car.aiProfile.defense > 0.4) {
     const sign = behind.lateralDelta >= 0 ? 1 : -1;
     targetLane = sign * ctx.state.track.width * 0.11 * (0.8 + car.aiProfile.defense * 0.5);
+    if (!intent.startsWith("Block")) intent = `Cover ${behind.other.label}`;
   }
+  if (!ahead && !behind && nearbyCars.length >= 3) {
+    intent = sector.tag === "hazard" ? "Pack in the killbox" : "Pack pressure";
+  }
+  const nearbyStrip = ctx.state.track.surgeStrips?.find((strip) => {
+    const delta = strip.t - pathInfo.t;
+    return delta > 0 && delta < 0.045;
+  });
+  if (nearbyStrip && (!ahead || sector.tag === "high-speed")) {
+    const lanePush = nearbyStrip.laneOffset * (car.rival || car.rivalHeat > 0.4 ? 0.92 : 0.74);
+    targetLane = targetLane === 0 ? lanePush : targetLane * 0.55 + lanePush * 0.45;
+    if (sector.tag === "high-speed") intent = intent.startsWith("Hunt") || intent.startsWith("Pass") ? intent : "Take the overdrive";
+  }
+  const laneScale = sector.tag === "hazard" ? 0.82 : sector.tag === "technical" ? 1.08 : 1;
+  targetLane *= laneScale;
   if (car.rival) {
     targetLane *= ahead ? 1.16 : 1.08;
   }
   car.targetLane = targetLane;
+  car.aiIntent = intent;
 }
 
 function updatePlayerInput(state, car) {
@@ -334,6 +479,7 @@ function updateAiInput(ctx, car, dt) {
   const info = nearestPathInfo(ctx.state.track, car.x, car.y);
   chooseAiLane(ctx, car, info);
   const sector = getSectorAtProgress(ctx.state.track, info.t);
+  const player = ctx.state.player;
   const lookAhead = samplePath(
     ctx.state.track.points,
     info.t + 0.014 + sector.lookAheadBias + car.aiProfile.risk * 0.004 + car.overtakePulse * 0.004,
@@ -359,13 +505,32 @@ function updateAiInput(ctx, car, dt) {
   const turnPenalty = Math.abs(delta) > 0.34 ? 0.66 : 1;
   const rivalPush = car.rival && straightLine ? 0.08 : 0;
   const overtakePush = car.overtakePulse > 0 ? 0.06 : 0;
-  car.throttle = clamp(baseThrottle * turnPenalty + rivalPush + overtakePush, 0.5, 1.08);
-  if (car.pickup === "boost" && straightLine && Math.random() < dt * (0.3 + car.aiProfile.aggression * 0.42 + car.overtakePulse * 0.6)) usePickup(ctx, car);
+  const heatPush = Math.min(0.12, car.rivalHeat * 0.05);
+  const sectorThrottle = sector.tag === "high-speed" ? 0.07 : sector.tag === "hazard" ? -0.05 : sector.tag === "recovery" ? 0.04 : 0.01;
+  const intentPush = car.aiIntent.startsWith("Hunt")
+    ? 0.08
+    : car.aiIntent.startsWith("Pass")
+      ? 0.05
+      : car.aiIntent.startsWith("Block") || car.aiIntent.startsWith("Cover")
+      ? -0.03
+        : 0;
+  const packBias = car.packPressure >= 2 ? 0.03 : 0;
+  const riskBias = sector.tag === "technical" ? car.aiProfile.risk * 0.015 : car.aiProfile.risk * 0.028;
+  const maxThrottle = sector.tag === "high-speed" ? 1.14 : sector.tag === "hazard" ? 1.02 : 1.08;
+  car.throttle = clamp(baseThrottle * turnPenalty + rivalPush + overtakePush + sectorThrottle + intentPush + packBias + riskBias + heatPush, 0.48, maxThrottle);
+  const playerRange = player && !player.destroyed ? distance(car, player) : 9999;
+  if (car.pickup === "boost" && straightLine && Math.random() < dt * (0.3 + car.aiProfile.aggression * 0.42 + car.overtakePulse * 0.6 + (sector.tag === "high-speed" ? 0.26 : 0) + (car.rival && playerRange < 240 ? 0.22 : 0))) usePickup(ctx, car);
   if (car.pickup === "pulse") {
-    const closeTarget = ctx.state.cars.find((other) => other.id !== car.id && !other.destroyed && distance(car, other) < 170);
-    if (closeTarget && Math.random() < dt * (0.5 + car.aiProfile.aggression)) usePickup(ctx, car);
+    const closeTarget = ctx.state.cars
+      .filter((other) => other.id !== car.id && !other.destroyed && distance(car, other) < 170)
+      .sort((a, b) => {
+        if (a.isPlayer) return -1;
+        if (b.isPlayer) return 1;
+        return distance(car, a) - distance(car, b);
+      })[0];
+    if (closeTarget && Math.random() < dt * (0.5 + car.aiProfile.aggression + heatPush * 1.6)) usePickup(ctx, car);
   }
-  if (car.pickup === "shield" && (car.damage / car.def.durability > 0.3 || info.distance > ctx.state.track.width * 0.38) && Math.random() < dt * 1.4) {
+  if (car.pickup === "shield" && (car.damage / car.def.durability > 0.3 || info.distance > ctx.state.track.width * 0.38 || sector.tag === "hazard") && Math.random() < dt * 1.4) {
     usePickup(ctx, car);
   }
 }
@@ -377,6 +542,14 @@ export function integrateCar(ctx, car, dt) {
     return;
   }
 
+  if (car.finished) {
+    car.vx = 0;
+    car.vy = 0;
+    car.throttle = 0;
+    car.steer = 0;
+    return;
+  }
+
   car.invuln = Math.max(0, car.invuln - dt);
   car.pickupCooldown = Math.max(0, car.pickupCooldown - dt);
   car.boostTimer = Math.max(0, car.boostTimer - dt);
@@ -385,6 +558,9 @@ export function integrateCar(ctx, car, dt) {
   car.chassisFlash = Math.max(0, car.chassisFlash - dt);
   car.resetCooldown = Math.max(0, car.resetCooldown - dt);
   car.overtakePulse = Math.max(0, car.overtakePulse - dt * 0.5);
+  car.slingshotTimer = Math.max(0, car.slingshotTimer - dt);
+  car.stripCooldown = Math.max(0, car.stripCooldown - dt);
+  car.rivalHeat = Math.max(0, car.rivalHeat - dt * 0.42);
 
   if (car.isPlayer) updatePlayerInput(ctx.state, car);
   else updateAiInput(ctx, car, dt);
@@ -392,6 +568,8 @@ export function integrateCar(ctx, car, dt) {
   const pathInfo = nearestPathInfo(ctx.state.track, car.x, car.y);
   car.progress = pathInfo.t;
   const sector = getSectorAtProgress(ctx.state.track, pathInfo.t);
+  car.sectorTag = sector.tag;
+  car.sectorName = sector.name;
   const forward = { x: Math.cos(car.angle), y: Math.sin(car.angle) };
   const lateral = { x: -forward.y, y: forward.x };
   const speedForward = car.vx * forward.x + car.vy * forward.y;
@@ -405,12 +583,14 @@ export function integrateCar(ctx, car, dt) {
 
   const assistConfig = car.isPlayer ? getAssistConfig(ctx.state) : null;
   const slipstreamBonus = getSlipstreamBonus(ctx.state, car) * car.def.slipstreamAffinity;
+  updateDraftState(ctx, car, dt, slipstreamBonus, speedForward);
   const catchUpBonus = car.isPlayer && car.place > Math.ceil(ctx.state.cars.length * 0.6) ? assistConfig.catchUpBonus : 0;
   const assistBonus = car.assistTimer > 0 ? (assistConfig?.recoveryBonus ?? 0.08) : 0;
   const boostFactor = car.boostTimer > 0 ? 1.3 : 1;
+  const slingshotFactor = 1 + Math.min(1, car.slingshotTimer) * 0.12;
   const surfaceSpeed = sector.speedBias;
-  const accelForce = car.def.accel * (1 - car.powerPenalty * 0.55 + catchUpBonus + assistBonus) * boostFactor;
-  const maxSpeed = car.def.maxSpeed * (1 - car.powerPenalty * 0.28 + slipstreamBonus * 0.16 + catchUpBonus + assistBonus) * boostFactor * surfaceSpeed;
+  const accelForce = car.def.accel * (1 - car.powerPenalty * 0.55 + catchUpBonus + assistBonus) * boostFactor * slingshotFactor;
+  const maxSpeed = car.def.maxSpeed * (1 - car.powerPenalty * 0.28 + slipstreamBonus * 0.16 + catchUpBonus + assistBonus) * boostFactor * slingshotFactor * surfaceSpeed;
   car.vx += forward.x * car.throttle * accelForce * dt;
   car.vy += forward.y * car.throttle * accelForce * dt;
 
@@ -427,37 +607,64 @@ export function integrateCar(ctx, car, dt) {
     car.vy *= scale;
   }
 
+  const previousX = car.x;
+  const previousY = car.y;
   car.x += car.vx * dt;
   car.y += car.vy * dt;
-  car.speedTrail.push({ x: car.x, y: car.y, age: 0.28 });
-  car.speedTrail = car.speedTrail.slice(-8);
+  const trailLife = car.boostTimer > 0 ? 0.62 : car.slingshotTimer > 0 ? 0.46 : 0.34;
+  const trailLimit = car.boostTimer > 0 ? 22 : car.slingshotTimer > 0 ? 18 : 14;
+  car.speedTrail.push({
+    x: car.x,
+    y: car.y,
+    angle: car.angle,
+    age: trailLife,
+    maxAge: trailLife,
+    energy: car.boostTimer > 0 ? 1 : car.slingshotTimer > 0 ? 0.55 : 0,
+  });
+  car.speedTrail = car.speedTrail.slice(-trailLimit);
 
-  updateCheckpointProgress(ctx, car);
   handleBoundaryCollision(ctx, car, dt);
+  updateCheckpointProgress(ctx, car, previousX, previousY);
+  handleSurgeStrips(ctx, car);
   handlePickups(ctx, car);
-  handleHazards(ctx, car);
+  handleHazards(ctx, car, dt);
   handleAssistReset(ctx, car, dt);
 }
 
-function updateCheckpointProgress(ctx, car) {
+function updateCheckpointProgress(ctx, car, previousX, previousY) {
   const info = nearestPathInfo(ctx.state.track, car.x, car.y);
+  car.pathT = info.t;
+  car.progress = getRelativeTrackProgress(ctx.state.track, info.t);
   const checkpoints = ctx.state.track.checkpoints;
-  const nextIndex = (car.checkpointIndex + 1) % checkpoints.length;
+  const nextIndex = ctx.state.track.type === "circuit"
+    ? (car.checkpointIndex + 1) % checkpoints.length
+    : Math.min(checkpoints.length - 1, car.checkpointIndex + 1);
   const nextCheckpoint = checkpoints[nextIndex];
-  if (Math.hypot(car.x - nextCheckpoint.x, car.y - nextCheckpoint.y) < ctx.state.track.width * 0.4) {
+  if (!car.finished && nextCheckpoint && crossesGateForward(nextCheckpoint, previousX, previousY, car.x, car.y)) {
     car.checkpointIndex = nextIndex;
     car.respawnCheckpoint = nextIndex;
-    if (nextIndex === 0) {
-      if (ctx.state.track.type === "circuit") {
-        car.currentLap += 1;
-        if (car.currentLap > ctx.state.currentEvent.laps && !car.finished) finishCar(ctx, car);
-      } else if (!car.finished && info.t > 0.92) {
-        finishCar(ctx, car);
-      }
+    if (ctx.state.track.type === "circuit" && nextIndex === 0) {
+      const lapTime = Math.max(0, ctx.state.elapsed - (car.lapStartedAt || 0));
+      car.lapTimes.push(lapTime);
+      car.lastLapTime = lapTime;
+      car.bestLapTime = Number.isFinite(car.bestLapTime) ? Math.min(car.bestLapTime, lapTime) : lapTime;
+      ctx.bus.emit("lap_complete", {
+        carId: car.id,
+        player: car.isPlayer,
+        lap: car.currentLap,
+        lapTime,
+        bestLap: Math.abs((car.bestLapTime ?? lapTime) - lapTime) < 0.005,
+      });
+      car.lapStartedAt = ctx.state.elapsed;
+      car.currentLap += 1;
+      if (car.currentLap > ctx.state.currentEvent.laps) finishCar(ctx, car);
+    } else if (ctx.state.track.type === "sprint" && nextIndex === checkpoints.length - 1) {
+      finishCar(ctx, car);
     }
   }
-  if (ctx.state.track.type === "sprint" && !car.finished && info.t > 0.98) finishCar(ctx, car);
-  car.progress = info.t;
+  car.previousX = car.x;
+  car.previousY = car.y;
+  car.lastProgress = car.progress;
 }
 
 function finishCar(ctx, car) {
@@ -513,11 +720,7 @@ function handleBoundaryCollision(ctx, car, dt) {
 
 function handlePickups(ctx, car) {
   for (const pickup of ctx.state.pickups) {
-    if (!pickup.active) {
-      pickup.respawn -= ctx.state.fixedStep;
-      if (pickup.respawn <= 0) pickup.active = true;
-      continue;
-    }
+    if (!pickup.active) continue;
     if (car.pickup) continue;
     const collectRadius = pickup.guidedBeacon ? 56 : 26;
     if (Math.hypot(car.x - pickup.x, car.y - pickup.y) < collectRadius) {
@@ -531,10 +734,37 @@ function handlePickups(ctx, car) {
   }
 }
 
-function handleHazards(ctx, car) {
+export function updatePickupRespawns(state, dt) {
+  for (const pickup of state.pickups) {
+    if (pickup.active) continue;
+    pickup.respawn -= dt;
+    if (pickup.respawn <= 0) pickup.active = true;
+  }
+}
+
+function handleSurgeStrips(ctx, car) {
+  if (!ctx.state.track.surgeStrips?.length || car.stripCooldown > 0) return;
+  for (const strip of ctx.state.track.surgeStrips) {
+    const dx = car.x - strip.x;
+    const dy = car.y - strip.y;
+    const along = dx * strip.tangent.x + dy * strip.tangent.y;
+    const across = dx * strip.normal.x + dy * strip.normal.y;
+    if (Math.abs(along) < strip.length * 0.5 && Math.abs(across) < strip.width * 0.5) {
+      car.boostTimer = Math.max(car.boostTimer, strip.sectorTag === "high-speed" ? 1.25 : 0.85);
+      car.slingshotTimer = Math.max(car.slingshotTimer, strip.sectorTag === "high-speed" ? 0.72 : 0.4);
+      car.assistTimer = Math.max(car.assistTimer, 0.28);
+      car.stripCooldown = 1.1;
+      ctx.state.fx.push({ kind: "surge-strip", x: car.x, y: car.y, radius: strip.width * 0.4, angle: strip.angle, life: 0.28, color: strip.color });
+      ctx.bus.emit("surge_strip", { player: car.isPlayer, sectorTag: strip.sectorTag });
+      break;
+    }
+  }
+}
+
+function handleHazards(ctx, car, dt) {
   for (const hazard of ctx.state.hazards) {
     if (Math.hypot(car.x - hazard.x, car.y - hazard.y) < hazard.radius + 8) {
-      applyDamage(ctx, car, hazard.damage * 0.018, "hazard", hazard.damage > 10 ? "heavy" : "scrape");
+      applyDamage(ctx, car, hazard.damage * 0.018 * dt * 60, "hazard", hazard.damage > 10 ? "heavy" : "scrape");
     }
   }
 }
@@ -550,15 +780,38 @@ function handleAssistReset(ctx, car, dt) {
   } else {
     car.stuckTimer = 0;
   }
+  if (info.distance > ctx.state.track.width * (car.isPlayer ? 0.9 : 0.78)) {
+    car.offTrackTimer += dt;
+  } else {
+    car.offTrackTimer = 0;
+  }
   if (forwardDelta > 2.25) car.wrongWayTimer += dt;
   else car.wrongWayTimer = 0;
+  const checkpoints = ctx.state.track.checkpoints;
+  const nextIndex = ctx.state.track.type === "circuit"
+    ? (car.checkpointIndex + 1) % checkpoints.length
+    : Math.min(checkpoints.length - 1, car.checkpointIndex + 1);
+  const nextCheckpoint = checkpoints[nextIndex];
+  if (!car.isPlayer && nextCheckpoint && Math.hypot(car.x - nextCheckpoint.x, car.y - nextCheckpoint.y) > ctx.state.track.width * 3.1) {
+    car.courseMissTimer += dt;
+  } else {
+    car.courseMissTimer = 0;
+  }
   car.wrongWay = car.wrongWayTimer > 1.1;
-  if (!car.isPlayer || car.resetCooldown > 0) return;
+  if (car.resetCooldown > 0) return;
   const autoResetScale = assistConfig?.autoResetScale ?? 1;
-  if (car.stuckTimer > 2.1 * autoResetScale || car.wrongWayTimer > 3.4 * autoResetScale) {
-    car.resetCooldown = 3;
-    ctx.bus.emit("respawn", { carId: car.id, player: true, assisted: true });
-    respawnCar(ctx, car);
+  const stuckThreshold = car.isPlayer ? 2.1 * autoResetScale : 1.8 + (car.aiProfile?.risk || 0.5) * 0.8;
+  const offTrackThreshold = car.isPlayer ? 2.4 * autoResetScale : 1.25 + (car.aiProfile?.risk || 0.5) * 0.35;
+  const courseMissThreshold = car.isPlayer ? Infinity : 1.25 + (car.aiProfile?.risk || 0.5) * 0.25;
+  const wrongWayThreshold = car.isPlayer ? 3.4 * autoResetScale : 2.6 + (car.aiProfile?.risk || 0.5) * 0.8;
+  if (
+    car.stuckTimer > stuckThreshold
+    || car.offTrackTimer > offTrackThreshold
+    || car.courseMissTimer > courseMissThreshold
+    || car.wrongWayTimer > wrongWayThreshold
+  ) {
+    car.resetCooldown = car.isPlayer ? 3 : 2.4;
+    respawnCar(ctx, car, { assisted: true });
   }
 }
 
@@ -567,7 +820,7 @@ export function handleCarCollisions(ctx) {
     for (let j = i + 1; j < ctx.state.cars.length; j += 1) {
       const a = ctx.state.cars[i];
       const b = ctx.state.cars[j];
-      if (a.destroyed || b.destroyed) continue;
+      if (a.destroyed || b.destroyed || a.finished || b.finished) continue;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const gap = Math.hypot(dx, dy);
@@ -581,18 +834,22 @@ export function handleCarCollisions(ctx) {
         b.y += normal.y * overlap * 0.5;
         const relVx = b.vx - a.vx;
         const relVy = b.vy - a.vy;
-        const impact = relVx * normal.x + relVy * normal.y;
-        if (impact > 0) {
-          const impulse = impact * 0.82;
-          a.vx += normal.x * impulse * 0.5;
-          a.vy += normal.y * impulse * 0.5;
-          b.vx -= normal.x * impulse * 0.5;
-          b.vy -= normal.y * impulse * 0.5;
-          const severity = impact > 300 ? "wreck" : impact > 145 ? "heavy" : "scrape";
-          applyDamage(ctx, a, impact * 0.026 * b.def.mass, "car", severity);
-          applyDamage(ctx, b, impact * 0.026 * a.def.mass, "car", severity);
+        const separatingVelocity = relVx * normal.x + relVy * normal.y;
+        const closingSpeed = Math.max(0, -separatingVelocity);
+        if (closingSpeed > 0) {
+          const impulse = closingSpeed * 0.82;
+          a.vx -= normal.x * impulse * 0.5;
+          a.vy -= normal.y * impulse * 0.5;
+          b.vx += normal.x * impulse * 0.5;
+          b.vy += normal.y * impulse * 0.5;
+          const severity = closingSpeed > 300 ? "wreck" : closingSpeed > 145 ? "heavy" : "scrape";
+          applyDamage(ctx, a, closingSpeed * 0.026 * b.def.mass, "car", severity);
+          applyDamage(ctx, b, closingSpeed * 0.026 * a.def.mass, "car", severity);
           if (a.rival || b.rival) {
+            a.rivalHeat = Math.max(a.rivalHeat, closingSpeed > 145 ? 1.7 : 1.05);
+            b.rivalHeat = Math.max(b.rivalHeat, closingSpeed > 145 ? 1.7 : 1.05);
             ctx.state.fx.push({ kind: "rival-flash", x: (a.x + b.x) * 0.5, y: (a.y + b.y) * 0.5, radius: 18, life: 0.25, color: "#ff5ccb" });
+            if (a.isPlayer || b.isPlayer) ctx.bus.emit("rival_contact", { player: true, heavy: closingSpeed > 145 });
           }
         }
       }

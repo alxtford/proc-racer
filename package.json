@@ -1,14 +1,20 @@
 {
   "name": "proc-racer",
   "version": "1.0.0",
+  "description": "SHARDLINE: a top-down neon wreck racer built for short, violent procedural runs.",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node scripts/serve.mjs",
     "serve": "npm start",
+    "issues:auth": "node scripts/codex-issues.mjs auth",
+    "issues:labels": "node scripts/codex-issues.mjs labels",
+    "issues:board": "node scripts/codex-issues.mjs board",
+    "issues:pick": "node scripts/codex-issues.mjs pick-next",
     "validate": "node scripts/run-validate-suite.mjs",
     "validate:content": "node scripts/validate-content.mjs",
-    "validate:garage": "node scripts/check-garage-loop.mjs"
+    "validate:garage": "node scripts/check-garage-loop.mjs",
+    "validate:reroll": "node scripts/check-course-reroll.mjs"
   },
   "dependencies": {
     "playwright": "^1.58.2"

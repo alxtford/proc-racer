@@ -113,7 +113,7 @@ if (copyMetrics.renderedLength > 88) {
   process.exit(1);
 }
 
-if (!clickTooltip.visible || clickTooltip.mode !== "click" || !clickTooltip.text.includes("Daily Challenge")) {
+if (!clickTooltip.visible || clickTooltip.mode !== "click" || !clickTooltip.text.includes("Daily Gauntlet")) {
   console.error("Click tooltip did not open with the expected menu guidance.");
   process.exit(1);
 }

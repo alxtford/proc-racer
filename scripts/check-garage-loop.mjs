@@ -21,7 +21,10 @@ page.on("console", (message) => {
 });
 
 await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+await page.waitForTimeout(400);
+await page.waitForSelector("#start-btn", { state: "visible" });
 await page.click("#start-btn");
+await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
 await page.waitForSelector("#launch-btn", { state: "visible" });
 await page.click("#menu-tab-profile");
 await page.click("#profile-tab-foundry");
@@ -51,7 +54,18 @@ await page.evaluate(() => {
 
 await page.click("#profile-tab-style");
 
-const buyButton = page.locator('.style-card[data-style-action="buy"]').first();
+const nextStylePageButton = page.locator('[data-style-page-nav="1"]').first();
+let pageTurns = 0;
+let buyButton = page.locator('.style-card[data-style-action="buy"]').first();
+while (!(await buyButton.count())
+  && pageTurns < 6
+  && await nextStylePageButton.count()
+  && !(await nextStylePageButton.isDisabled())) {
+  await nextStylePageButton.click();
+  await page.waitForTimeout(120);
+  pageTurns += 1;
+  buyButton = page.locator('.style-card[data-style-action="buy"]').first();
+}
 if (!(await buyButton.count())) {
   errors.push("No buyable style card was available.");
 } else {

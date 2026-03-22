@@ -32,6 +32,9 @@ async function main() {
     await runNodeScript(path.join("scripts", "check-garage-loop.mjs"), {
       PROC_RACER_BASE_URL: url,
     });
+    await runNodeScript(path.join("scripts", "check-course-reroll.mjs"), {
+      PROC_RACER_BASE_URL: url,
+    });
   } finally {
     await closeStaticServer(server);
   }

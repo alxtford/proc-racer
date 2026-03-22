@@ -189,7 +189,7 @@ function createStarterCar(seed) {
     tierLabel: "Starter",
     name: "Factory Mule",
     role: "Starter",
-    guidance: "Underpowered but steady. Good enough to learn the line, bad enough to want an upgrade fast.",
+    guidance: "Cheap steel with just enough bite to survive. It will make you want better metal fast.",
     traits: ["balanced", "underpowered"],
     color: "#6a84a8",
     accentColor: "#7de9ff",

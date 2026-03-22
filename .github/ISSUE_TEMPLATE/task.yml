@@ -1,0 +1,57 @@
+name: Work item
+description: Track a feature, polish pass, or repo task that Codex may implement.
+title: "[Task] "
+labels:
+  - codex:needs-human
+body:
+  - type: dropdown
+    id: work_type
+    attributes:
+      label: Work type
+      options:
+        - Feature
+        - Polish
+        - Chore
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What player or repo value does this work unlock?
+      placeholder: Pack racing still clumps early, which makes overtakes unreadable and flattens rival pressure.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should be true after this lands?
+      placeholder: Rivals should produce clearer passes and maintain presence without immediate accordion clumping.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Clear implementation or behavior checks.
+      placeholder: |
+        - Targeted scenario shows less early clumping
+        - AI remains course-valid
+        - Existing race validation still passes
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation expectation
+      description: Which checks should the assignee run?
+      placeholder: npm run validate plus targeted browser or JSON evidence
+    validations:
+      required: true
+  - type: textarea
+    id: blockers
+    attributes:
+      label: Dependencies or blockers
+      description: Anything that makes this unsafe for autonomous work.
+      placeholder: Requires a product call on whether aggression or readability has priority if they conflict.
