@@ -94,7 +94,10 @@ const states = [
       await page.keyboard.press("Escape");
       await page.evaluate(() => {
         const state = window.__procRacer;
-        state.player.finished = true;
+        state.cars.forEach((car, index) => {
+          car.finished = true;
+          car.finishMs = state.elapsed + index * 0.05;
+        });
         state.player.finishMs = state.elapsed;
       });
       await page.evaluate(() => window.advanceTime(120));

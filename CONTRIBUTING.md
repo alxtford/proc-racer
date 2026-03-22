@@ -25,7 +25,7 @@ Before changing menu flow, HUD, results, or progression behavior, read:
 The repo is biased toward:
 
 - fast race launch
-- forgiving recovery after mistakes
+- violent but readable collisions and short-run replay value
 - readable procedural variety
 - visible replay/mastery hooks
 

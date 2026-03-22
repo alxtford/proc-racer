@@ -1,7 +1,7 @@
-# Proc Racer Product Intent
+# SHARDLINE Product Intent
 
 ## Product Thesis
-Proc Racer is a fast-launch neon arcade racer for short repeat sessions. The value proposition is immediate access to a dramatic race, readable procedural variety, forgiving recovery after mistakes, and enough mastery hooks to make "one more run" feel justified.
+SHARDLINE is a fast-launch neon wreck racer for short repeat sessions. The value proposition is immediate access to a brutal procedural race, readable destructive spectacle, and enough mastery hooks to make "one more run" feel justified.
 
 ## Player Promise
 - Start a race in seconds, not minutes.
@@ -54,7 +54,7 @@ The results screen should answer:
 
 ## Value Pillars
 - Fast start: the default path should be one primary launch action.
-- Forgiving drama: collisions should feel intense without making minor mistakes fatal.
+- Violent but readable: collisions should feel intense without making minor mistakes fatal.
 - Readable variety: biome, format, modifiers, and car choice should change texture, not just labels.
 - Visible mastery: bests, medals, goals, rivals, and dailies must be legible before and after a run.
 

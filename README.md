@@ -1,13 +1,13 @@
-# Proc Racer
+# SHARDLINE
 
 [![Validate](https://github.com/alxtford/proc-racer/actions/workflows/validate.yml/badge.svg)](https://github.com/alxtford/proc-racer/actions/workflows/validate.yml)
 
-Proc Racer is a top-down neon arcade racer built for fast starts, forgiving wrecks, and short replayable runs.
+SHARDLINE is a top-down neon wreck racer built for short, violent procedural runs, aggressive bodywork damage, and a Foundry loop that keeps feeding better metal into the garage.
 
 ## What Ships Today
 
 - Seeded circuit and point-to-point races.
-- Arcade handling, AI rivals, pickups, damage, wrecks, and respawn recovery.
+- Arcade handling, AI rivals, pickups, damage, wrecks, and dramatic respawn resets.
 - A Foundry garage loop with starter cars, random rolls, scrap, and cosmetic unlocks.
 - A replay-first menu flow with daily challenges and short-session progression.
 

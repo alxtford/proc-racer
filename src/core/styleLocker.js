@@ -83,7 +83,7 @@ export function getGarageCarStyle(save, car) {
     accentColor: skin?.tint ? mixHexColors(accentBase, skin.tint, Math.min(0.72, (skin.mix ?? 0.2) * 1.25)) : accentBase,
     trailColor: trail?.color || accentBase,
     skidColor: skid?.color || "rgba(220, 232, 255, 0.18)",
-    emoteBadge: emote?.badge || "LOCKED IN",
-    emoteName: emote?.name || "Steady Nod",
+    emoteBadge: emote?.badge || "STEEL SET",
+    emoteName: emote?.name || "Cold Stare",
   };
 }

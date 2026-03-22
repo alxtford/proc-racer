@@ -6,12 +6,13 @@ export const STARTING_PREMIUM = 0;
 export const WALLET_VERSION = 1;
 export const GARAGE_ROLL_COST = 180;
 export const GARAGE_ROLL_PREMIUM_COST = 3;
+export const COURSE_REROLL_COST = 30;
 
 export const CURRENCY_DEFS = {
   flux: {
     id: "flux",
     label: "Flux",
-    description: "Earned from racing. Spent on Foundry rolls.",
+    description: "Earned from racing. Spent on Foundry rolls and strike-board reforges.",
   },
   scrap: {
     id: "scrap",
@@ -32,6 +33,13 @@ export const STORE_PRODUCTS = {
     prices: [
       { currency: "flux", amount: GARAGE_ROLL_COST },
       { currency: "premium", amount: GARAGE_ROLL_PREMIUM_COST },
+    ],
+  },
+  course_refresh: {
+    id: "course_refresh",
+    label: "Strike Board Reforge",
+    prices: [
+      { currency: "flux", amount: COURSE_REROLL_COST },
     ],
   },
 };

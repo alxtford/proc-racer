@@ -2,7 +2,7 @@
 
 ## Scope
 
-This audit reviews the current Proc Racer experience across three journeys:
+This audit reviews the current SHARDLINE experience across three journeys:
 
 - first-time player
 - quick-replay arcade player
@@ -12,7 +12,7 @@ The goal is to test whether the current frontend proves the product value define
 
 ## Visual Review Lens
 
-- Visual thesis: kinetic neon arcade racing with forgiving destruction and immediate replay energy
+- Visual thesis: kinetic neon wreck racing with readable destruction and immediate replay energy
 - Content plan: prove the fantasy fast, reduce setup friction, make the next useful action obvious
 - Interaction thesis: launch quickly, recover quickly, retry quickly
 
@@ -20,7 +20,7 @@ The goal is to test whether the current frontend proves the product value define
 
 ### P0. The product promise is still implicit instead of explicit.
 
-The menu says “Retro Futurist Circuit Violence” and shows a large logo, but it does not clearly explain the actual player value: fast arcade racing, stylish wrecks, forgiving recovery, and immediate replay. The strongest screen real estate goes to branding and mood, while the reason to care is buried in smaller support copy and hero points.
+The menu says “Retro Futurist Circuit Violence” and shows a large logo, but it does not clearly explain the actual player value: fast arcade racing, stylish wrecks, violent readable impacts, and immediate replay. The strongest screen real estate goes to branding and mood, while the reason to care is buried in smaller support copy and hero points.
 
 Evidence:
 
@@ -64,7 +64,7 @@ Evidence:
 
 ### P0. The tutorial promise is not fulfilled end to end.
 
-The tutorial event claims to teach pickups, forgiving recovery, and momentum, but the current experience still allows the player to finish without using a pickup and receive `MISS Use any pickup` on the results screen. That means the authored promise in content is not matched by UI surfacing, track affordance, or results messaging.
+The tutorial event claims to teach pickups, impact recovery, and momentum, but the current experience still allows the player to finish without using a pickup and receive `MISS Use any pickup` on the results screen. That means the authored promise in content is not matched by UI surfacing, track affordance, or results messaging.
 
 Evidence:
 
@@ -148,7 +148,7 @@ The repo already has:
 - ghost persistence
 - unlockable car
 
-But the frontend barely surfaces these as reasons to return. `Daily challenge live` and `Daily best` are passive status chips. The daily event has more visual weight than a normal card only by badge text. There is no obvious medal ladder, no PB delta on results, no ghost surfaced in the menu, no next unlock explanation, and no visible “why today” framing.
+But the frontend barely surfaces these as reasons to return. `Daily gauntlet live` and `Gauntlet best` are passive status chips. The daily event has more visual weight than a normal card only by badge text. There is no obvious medal ladder, no PB delta on results, no ghost surfaced in the menu, no next unlock explanation, and no visible “why today” framing.
 
 Evidence:
 
@@ -176,7 +176,7 @@ This should remain a guardrail so future UI additions do not drift back toward s
 
 ### 2. Rewrite the hero and primary CTA around player value, not atmosphere.
 
-- Replace mood-first copy with a one-line promise about fast neon racing, stylish wrecks, and fast recovery.
+- Replace mood-first copy with a one-line promise about fast neon racing, stylish wrecks, and violent replayable impacts.
 - Rename `Quick Remix` to an outcome-led action.
 - Make the first two actions unmistakable: recommended start and instant random run.
 
