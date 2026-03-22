@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: SHARDLINE issue workflow
+    url: https://github.com/alxtford/proc-racer/blob/main/docs/github-issue-workflow.md
+    about: Read the label model, issue standard, and Codex worker loop before opening backlog work.

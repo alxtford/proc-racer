@@ -35,6 +35,20 @@ The repo is biased toward:
 - `progress.md` is a local working log and is not tracked.
 - Prefer extending the modular runtime under `src/` rather than reviving legacy one-file code paths.
 
+## GitHub Issue Workflow
+
+Backlog work is tracked in GitHub Issues and the Codex worker flow is documented in [docs/github-issue-workflow.md](docs/github-issue-workflow.md).
+
+Useful commands:
+
+- `npm run issues:auth`
+- `npm run issues:labels`
+- `npm run issues:board`
+- `npm run issues:pick`
+- `node scripts/codex-issues.mjs start-next --json`
+- `node scripts/codex-issues.mjs finish --issue <number> --validation "npm run validate"`
+- `node scripts/codex-issues.mjs block --issue <number> --label codex:needs-human --reason "..."`
+
 ## Pull Requests
 
 Keep PRs scoped and include:

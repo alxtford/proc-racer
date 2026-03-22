@@ -1,0 +1,48 @@
+name: Bug report
+description: Track a broken gameplay, UI, generator, or validation behavior.
+title: "[Bug] "
+labels:
+  - type:bug
+  - codex:needs-human
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What is broken, and how does it affect the player or repo?
+      placeholder: The race HUD still overflows at 800x600 and hides the restart action.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Desired outcome
+      description: What should happen instead?
+      placeholder: The HUD should remain readable and the dominant race actions should stay visible without scrolling.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete checks that define done.
+      placeholder: |
+        - No overflow at 800x600 and 1280x720
+        - Restart remains visible during results and pause states
+        - Existing validation still passes
+    validations:
+      required: true
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation expectation
+      description: Which checks or captures should confirm the fix?
+      placeholder: npm run validate plus responsive screenshots or targeted browser checks
+    validations:
+      required: true
+  - type: textarea
+    id: blockers
+    attributes:
+      label: Dependencies or blockers
+      description: Note any design calls, related issues, or unknowns.
+      placeholder: Needs sign-off on whether compact mode should cut copy or add tabs.

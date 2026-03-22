@@ -7,6 +7,10 @@
     "start": "node scripts/serve.mjs",
     "serve": "npm start",
     "validate": "node scripts/run-validate-suite.mjs",
+    "issues:auth": "node scripts/codex-issues.mjs auth",
+    "issues:labels": "node scripts/codex-issues.mjs labels",
+    "issues:board": "node scripts/codex-issues.mjs board",
+    "issues:pick": "node scripts/codex-issues.mjs pick-next",
     "validate:content": "node scripts/validate-content.mjs",
     "validate:garage": "node scripts/check-garage-loop.mjs"
   },
