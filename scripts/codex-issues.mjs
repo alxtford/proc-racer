@@ -496,13 +496,14 @@ async function ensureLabels(parsed) {
       "label",
       "create",
       label.name,
+      "--force",
       "--color",
       label.color,
       "--description",
       label.description,
       ...getRepoArgs(parsed),
     ]);
-    console.log(`Created label ${label.name}`);
+    console.log(`Ensured label ${label.name}`);
   }
 }
 
