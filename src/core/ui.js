@@ -822,7 +822,7 @@ function getProfileSummaryItems(state) {
       label: "Pressure Log",
       value: history.length ? `${history.length} runs` : "No runs",
       note: history.length
-        ? `${totalPodiums} podiums, ${totalWins} wins. Latest: ${latestRun?.eventName || "Unknown route"}.`
+        ? `${totalPodiums} podiums, ${totalWins} wins. Latest: ${latestRun ? getRunHistoryEventName(latestRun) : "Unknown route"}.`
         : "Finish any event to start building the pressure log.",
     },
     {
