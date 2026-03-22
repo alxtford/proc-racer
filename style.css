@@ -2765,10 +2765,6 @@ body[data-contrast="high"]::before {
   margin-top: 4px;
 }
 
-.menu[data-view="profile"] #profile-runs {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .settings-row {
   display: grid;
   gap: 10px;
