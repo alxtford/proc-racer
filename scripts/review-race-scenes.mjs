@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import fs from "node:fs/promises";
+import { waitForMenuStage } from "./menu-helpers.mjs";
 
 const browser = await chromium.launch({ headless: true });
 const url = "http://127.0.0.1:4173";
@@ -29,6 +30,7 @@ for (const target of targets) {
   await page.waitForTimeout(500);
   const startButton = page.locator("#start-btn");
   if (await startButton.count()) await startButton.click();
+  await waitForMenuStage(page, "hub");
   await page.waitForSelector(".event-card");
   await page.locator(".event-card", { hasText: target.title }).click();
   await page.waitForTimeout(100);

@@ -1,5 +1,6 @@
 import path from "node:path";
 import { chromium } from "playwright";
+import { clickFirst, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
 
 const outputDir = path.resolve(process.cwd(), "output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -18,7 +19,7 @@ async function captureSetup(browser, viewport, name) {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
-  await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
+  await waitForMenuStage(page, "hub");
   await page.waitForTimeout(260);
   await page.screenshot({ path: path.join(outputDir, `${name}.png`) });
   await page.close();
@@ -29,9 +30,13 @@ async function captureGarage(browser, viewport, name, pane = "garage") {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
-  await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-  await page.click("#menu-tab-profile");
-  if (pane !== "garage") await page.click(`#profile-tab-${pane}`);
+  await waitForMenuStage(page, "hub");
+  await clickFirst(page, ["#menu-tab-profile", "#menu-tab-garage"]);
+  await waitForMenuScreen(page, "garage");
+  if (pane !== "garage") {
+    await clickFirst(page, [`#menu-tab-${pane}`, `#profile-tab-${pane}`]);
+    await waitForMenuScreen(page, pane);
+  }
   await page.waitForTimeout(260);
   await page.screenshot({ path: path.join(outputDir, `${name}.png`) });
   await page.close();
@@ -42,9 +47,9 @@ async function captureSettings(browser, viewport, name, pane = "comfort") {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
-  await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
+  await waitForMenuStage(page, "hub");
   await page.click("#menu-tab-settings");
-  if (pane !== "comfort") await page.click(`#settings-tab-${pane}`);
+  await waitForMenuScreen(page, "settings");
   await page.waitForTimeout(260);
   await page.screenshot({ path: path.join(outputDir, `${name}.png`) });
   await page.close();
@@ -55,7 +60,7 @@ async function capturePause(browser, viewport, name) {
   await page.addInitScript(() => window.localStorage.clear());
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
-  await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
+  await waitForMenuStage(page, "hub");
   await page.click("#launch-btn");
   await page.evaluate(() => window.advanceTime(3200));
   await page.keyboard.down("w");

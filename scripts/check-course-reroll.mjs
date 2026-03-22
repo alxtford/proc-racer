@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+import { waitForMenuStage } from "./menu-helpers.mjs";
 
 const outDir = path.resolve("output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -23,8 +24,7 @@ page.on("console", (message) => {
 await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
 await page.waitForTimeout(400);
 await page.click("#start-btn");
-await page.waitForFunction(() => window.__procRacer?.menuStage === "garage");
-await page.click("#home-tab-board");
+await waitForMenuStage(page, "hub");
 await page.waitForSelector("#board-reroll-btn:not(.hidden)");
 
 const initialState = await page.evaluate(() => ({
