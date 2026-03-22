@@ -806,7 +806,7 @@ function getProfileSummaryItems(state) {
     const delta = formatter(Math.abs(current - previous));
     return improved
       ? `${delta} better than the previous five.`
-      : `${delta} off the previous five pace.`;
+      : `${delta} worse than the previous five.`;
   };
   const latestRun = history[0] || null;
   const totalPodiums = countRunsMatching(history, (run) => Number.isFinite(run.place) && run.place <= 3);
