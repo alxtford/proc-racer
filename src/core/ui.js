@@ -789,33 +789,110 @@ function getGhostState(state) {
 }
 
 function getProfileSummaryItems(state) {
-  const flux = getCurrencyBalance(state.save, "flux");
-  const liveCars = getFilledGarageCars(state.save);
-  const nextPull = Math.max(0, GARAGE_ROLL_COST - flux);
-  const bestScore = liveCars.length ? Math.max(...liveCars.map((car) => getGarageScore(car))) : 0;
-  const ghostCount = getGhostCount(state);
+  const history = state.save.runHistory || [];
+  const recentWindow = history.slice(0, 5);
+  const previousWindow = history.slice(5, 10);
+  const countRunsMatching = (runs, predicate) => runs.filter(predicate).length;
+  const averageMetric = (runs, getValue) => {
+    const values = runs.map(getValue).filter((value) => Number.isFinite(value));
+    if (!values.length) return null;
+    return values.reduce((total, value) => total + value, 0) / values.length;
+  };
+  const formatTrendNote = (current, previous, formatter, fasterIsBetter = false) => {
+    if (current === null) return "No completed runs logged yet.";
+    if (previous === null) return "Need 10 logged runs to compare momentum.";
+    if (Math.abs(current - previous) < 0.01) return "Holding steady against the previous five.";
+    const improved = fasterIsBetter ? current < previous : current > previous;
+    const delta = formatter(Math.abs(current - previous));
+    return improved
+      ? `${delta} better than the previous five.`
+      : `${delta} off the previous five pace.`;
+  };
+  const latestRun = history[0] || null;
+  const totalPodiums = countRunsMatching(history, (run) => Number.isFinite(run.place) && run.place <= 3);
+  const totalWins = countRunsMatching(history, (run) => run.place === 1);
+  const paceAverage = averageMetric(recentWindow, (run) => run.finishTime);
+  const previousPaceAverage = averageMetric(previousWindow, (run) => run.finishTime);
+  const wreckAverage = averageMetric(recentWindow, (run) => run.wrecks);
+  const previousWreckAverage = averageMetric(previousWindow, (run) => run.wrecks);
+  const fluxAverage = averageMetric(recentWindow, (run) => run.currencyEarned || 0);
+  const previousFluxAverage = averageMetric(previousWindow, (run) => run.currencyEarned || 0);
   return [
     {
-      label: "Daily Killline",
-      value: state.save.daily.bestTime ? formatTime(state.save.daily.bestTime) : "Uncut",
-      note: state.save.daily.bestTime ? "Today's best time is already on the board." : "Plant the first gauntlet time today.",
+      label: "Pressure Log",
+      value: history.length ? `${history.length} runs` : "No runs",
+      note: history.length
+        ? `${totalPodiums} podiums, ${totalWins} wins. Latest: ${latestRun?.eventName || "Unknown route"}.`
+        : "Finish any event to start building the pressure log.",
     },
     {
-      label: "Foundry Charge",
-      value: flux >= GARAGE_ROLL_COST ? "Roll ready" : `${nextPull} Flux`,
-      note: flux >= GARAGE_ROLL_COST ? "Three capsules can crack right now." : `Next pull opens in ${nextPull} Flux.`,
+      label: "Pace Window",
+      value: paceAverage !== null ? formatTime(paceAverage) : "--",
+      note: paceAverage !== null
+        ? `Last five average. ${formatTrendNote(paceAverage, previousPaceAverage, formatGain, true)}`
+        : "Log finishes to compare current pace against older runs.",
     },
     {
-      label: "Ghost Pack",
-      value: ghostCount ? `${ghostCount} saved` : "No ghosts",
-      note: ghostCount ? "Your best lines are ready to chase." : "Bank cleaner runs to seed rivals and ghosts.",
+      label: "Wreck Rate",
+      value: wreckAverage !== null ? `${wreckAverage.toFixed(wreckAverage >= 10 ? 0 : 1)} / run` : "--",
+      note: wreckAverage !== null
+        ? `Last five average. ${formatTrendNote(wreckAverage, previousWreckAverage, (value) => `${value.toFixed(value >= 10 ? 0 : 1)} wrecks`, true)}`
+        : "Take a few runs to see whether the field is chewing the chassis up.",
     },
     {
-      label: "Garage Peak",
-      value: bestScore ? `Rating ${bestScore}` : "Starter steel",
-      note: bestScore ? "Highest live chassis rating in the garage." : "Your first real upgrade is still ahead.",
+      label: "Flux Flow",
+      value: fluxAverage !== null ? `+${Math.round(fluxAverage)} / run` : "--",
+      note: fluxAverage !== null
+        ? `Last five average. ${formatTrendNote(fluxAverage, previousFluxAverage, (value) => `${Math.round(value)} Flux`)}`
+        : "Reward flow appears once the pressure log has completed runs.",
     },
   ];
+}
+
+function getRunHistoryEventName(state, run) {
+  const normalizedEventId = typeof run.eventId === "string" ? run.eventId.split("@board:")[0] : run.eventId;
+  return run.eventName
+    || state.events.find((event) => event.id === run.eventId || event.id === normalizedEventId || event.templateId === normalizedEventId)?.name
+    || normalizedEventId
+    || run.eventId
+    || "Unknown route";
+}
+
+function getRunHistoryItems(state) {
+  const history = state.save.runHistory || [];
+  if (!history.length) {
+    return [
+      `<div class="results-item">
+        <strong>Daily killline</strong>
+        <span class="results-inline">${state.save.daily.bestTime ? `Beat ${formatTime(state.save.daily.bestTime)}` : "Plant the first gauntlet time."}</span>
+      </div>`,
+      `<div class="results-item">
+        <strong>Foundry target</strong>
+        <span class="results-inline">${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to the next pull.</span>
+      </div>`,
+      `<div class="results-item">
+        <strong>First pressure log</strong>
+        <span class="results-inline">Finish any run to bank pace, wreck, and reward trends here.</span>
+      </div>`,
+    ];
+  }
+
+  return history.map((run, index) => {
+    const eventName = getRunHistoryEventName(state, run);
+    const eventLabel = eventName.length > 26 ? `${eventName.slice(0, 25)}...` : eventName;
+    const wreckLabel = `${run.wrecks || 0} wreck${run.wrecks === 1 ? "" : "s"}`;
+    const fluxLabel = `+${run.currencyEarned || 0} Flux`;
+    const lapLabel = Number.isFinite(run.bestLapTime) ? `Lap ${formatTime(run.bestLapTime)}` : "Lap --";
+    return `
+      <div class="results-item profile-run-entry">
+        <div class="profile-run-head">
+          <strong>${String(index + 1).padStart(2, "0")}. ${eventLabel}</strong>
+          <span class="profile-run-time">${formatTime(run.finishTime)}</span>
+        </div>
+        <span class="results-inline">P${run.place} // ${wreckLabel} // ${fluxLabel} // ${lapLabel}</span>
+      </div>
+    `;
+  });
 }
 
 function getFoundryInsightItems(state) {
@@ -1508,21 +1585,7 @@ export function createUi(state, callbacks = {}) {
       </div>
     `).join("");
 
-    const recentRuns = state.save.runHistory.slice(0, 3);
-    refs.profileRuns.innerHTML = recentRuns.length
-      ? recentRuns.map((run) => {
-        const normalizedEventId = typeof run.eventId === "string" ? run.eventId.split("@board:")[0] : run.eventId;
-        const eventName = run.eventName
-          || state.events.find((event) => event.id === run.eventId || event.id === normalizedEventId || event.templateId === normalizedEventId)?.name
-          || normalizedEventId
-          || run.eventId;
-        return `<div class="results-item"><strong>${eventName}</strong> <span class="results-inline">P${run.place} // ${formatTime(run.finishTime)} // +${run.currencyEarned || 0} Flux // ${run.wrecks} wrecks</span></div>`;
-      }).join("")
-      : [
-        `<div class="results-item"><strong>Daily killline</strong> <span class="results-inline">${state.save.daily.bestTime ? `Beat ${formatTime(state.save.daily.bestTime)}` : "Plant the first gauntlet time"}</span></div>`,
-        `<div class="results-item"><strong>Foundry target</strong> <span class="results-inline">${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to the next pull</span></div>`,
-        `<div class="results-item"><strong>First pressure log</strong> <span class="results-inline">Finish any run to start building the run history.</span></div>`,
-      ].join("");
+    refs.profileRuns.innerHTML = getRunHistoryItems(state).join("");
 
     refs.foundryInsights.innerHTML = getFoundryInsightItems(state).map((item) => `
       <div class="profile-item profile-item-compact">

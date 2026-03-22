@@ -2646,6 +2646,42 @@ body[data-contrast="high"]::before {
   padding-right: 0;
 }
 
+#profile-runs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+#profile-runs .results-item {
+  min-width: 0;
+}
+
+.profile-run-entry {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-run-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.profile-run-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-run-time {
+  flex: 0 0 auto;
+  font-family: "Orbitron", sans-serif;
+  font-size: 0.72rem;
+  color: var(--cyan);
+}
+
 .garage-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2727,6 +2763,10 @@ body[data-contrast="high"]::before {
   display: block;
   margin-left: 0;
   margin-top: 4px;
+}
+
+.menu[data-view="profile"] #profile-runs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .settings-row {
@@ -4118,6 +4158,10 @@ body[data-contrast="high"]::before {
     grid-template-columns: repeat(2, minmax(240px, 1fr));
   }
 
+  .menu[data-view="profile"] #profile-runs {
+    grid-template-columns: 1fr;
+  }
+
   .garage-roll-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -4256,6 +4300,10 @@ body[data-contrast="high"]::before {
   .menu[data-view="settings"] .settings-grid,
   .menu[data-view="settings"] .settings-split,
   .results-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .menu[data-view="profile"] #profile-runs {
     grid-template-columns: 1fr;
   }
 
