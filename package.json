@@ -14,12 +14,15 @@
     "validate": "node scripts/run-validate-suite.mjs",
     "validate:playwright": "playwright test",
     "validate:content": "node scripts/validate-content.mjs",
+    "validate:units": "node --test tests/units/core.test.mjs",
     "validate:garage": "playwright test --grep @garage",
     "validate:reroll": "playwright test --grep @reroll",
     "validate:copy-audio": "playwright test --grep @copy-audio",
-    "validate:smoke": "playwright test --grep @smoke"
+    "validate:smoke": "playwright test --grep @smoke",
+    "validate:migration": "playwright test --grep @migration",
+    "validate:persistence": "playwright test --grep @persistence"
   },
   "dependencies": {
-    "playwright": "^1.58.2"
+    "playwright": "1.56.1"
   }
 }
