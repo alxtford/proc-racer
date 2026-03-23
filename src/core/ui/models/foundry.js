@@ -1,10 +1,12 @@
 import { getCurrencyBalance } from "../../economy.js";
 import { GARAGE_ROLL_COST, getRollReadyStatus, getGarageScore, isGarageSlotFilled } from "../../garage.js";
-import { getFoundryInsightItems, getRollCallout } from "../legacy.js";
+import { getFoundryInsightItems, getRollCallout, getSelectedGarageCar } from "../legacy.js";
 
 export function buildFoundryModel(state) {
+  const selectedCar = getSelectedGarageCar(state);
   return {
     type: "foundry",
+    selectedCar,
     flux: getCurrencyBalance(state.save, "flux"),
     rollReady: getRollReadyStatus(state.save),
     rollLabel: `Roll 3 Cars // ${GARAGE_ROLL_COST} Flux`,

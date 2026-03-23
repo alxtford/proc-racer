@@ -1,4 +1,4 @@
-import { renderInfoButton, renderSummaryGrid } from "../render-helpers.js";
+import { renderInfoButton, renderIsoCarFigure, renderSummaryGrid } from "../render-helpers.js";
 
 function renderFoundryForge(model) {
   return `
@@ -12,6 +12,9 @@ function renderFoundryForge(model) {
       </div>
       <div class="gacha-machine workspace-foundry-machine-body">
         <div class="gacha-machine-hero">
+          <div class="workspace-foundry-car">
+            ${renderIsoCarFigure(model.selectedCar, { role: "Forge anchor" })}
+          </div>
           <div class="gacha-core"></div>
           <div class="gacha-ring gacha-ring-a"></div>
           <div class="gacha-ring gacha-ring-b"></div>

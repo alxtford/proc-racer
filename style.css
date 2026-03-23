@@ -2662,6 +2662,20 @@ body[data-contrast="high"]::before {
   align-content: start;
 }
 
+.workspace-car-hero {
+  grid-template-columns: minmax(180px, 0.62fr) minmax(0, 1fr) minmax(240px, 0.92fr);
+}
+
+.garage-hero-figure {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.garage-hero-figure .iso-car-figure {
+  width: 100%;
+}
+
 .garage-hero-copy .focus-copy {
   display: -webkit-box;
   overflow: hidden;
@@ -3042,6 +3056,16 @@ body[data-contrast="high"]::before {
     0 0 32px rgba(255, 31, 209, 0.08);
 }
 
+.workspace-foundry-car {
+  position: absolute;
+  left: 14px;
+  right: auto;
+  bottom: 12px;
+  width: min(164px, 56%);
+  z-index: 2;
+  pointer-events: none;
+}
+
 #gacha-machine-hero {
   min-height: clamp(132px, 19vh, 176px);
 }
@@ -3333,6 +3357,7 @@ body[data-contrast="high"]::before {
   box-shadow:
     0 0 20px color-mix(in srgb, var(--preview-accent) 24%, transparent),
     inset 0 -10px 18px rgba(0, 0, 0, 0.28);
+  transform: translate(-50%, -50%) rotate(-18deg) skew(24deg);
 }
 
 .style-preview-car::before,
@@ -3446,6 +3471,165 @@ body[data-contrast="high"]::before {
 .style-preview-live .style-preview-car {
   width: 126px;
   height: 54px;
+}
+
+.iso-car-figure {
+  --iso-car-body: #ffb100;
+  --iso-car-accent: #8df7ff;
+  position: relative;
+  min-height: 138px;
+  border: 1px solid color-mix(in srgb, var(--iso-car-accent) 24%, rgba(255, 255, 255, 0.12));
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--iso-car-accent) 18%, transparent), transparent 34%),
+    linear-gradient(180deg, rgba(9, 15, 29, 0.92), rgba(6, 11, 22, 0.84));
+  box-shadow:
+    inset 0 0 36px rgba(47, 246, 255, 0.05),
+    0 0 28px color-mix(in srgb, var(--iso-car-accent) 10%, transparent);
+}
+
+.iso-car-figure-empty {
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.iso-car-shadow,
+.iso-car-trail,
+.iso-car-shell,
+.iso-car-roof,
+.iso-car-cabin,
+.iso-car-stripe,
+.iso-car-wing,
+.iso-car-meta {
+  position: absolute;
+}
+
+.iso-car-shadow {
+  left: 26px;
+  right: 30px;
+  bottom: 26px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.32);
+  filter: blur(6px);
+}
+
+.iso-car-trail {
+  left: 18px;
+  width: 40%;
+  bottom: 38px;
+  height: 10px;
+  border-radius: 999px;
+  transform: rotate(-18deg);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--iso-car-accent) 64%, transparent), transparent 88%);
+  opacity: 0.78;
+}
+
+.iso-car-shell {
+  left: 46%;
+  top: 54%;
+  width: 112px;
+  height: 46px;
+  border-radius: 18px 24px 14px 14px;
+  transform: translate(-50%, -50%) rotate(-24deg) skew(26deg);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--iso-car-body) 76%, #173051), #09101f 82%);
+  box-shadow:
+    0 0 22px color-mix(in srgb, var(--iso-car-accent) 28%, transparent),
+    inset 0 -10px 16px rgba(0, 0, 0, 0.34);
+}
+
+.iso-car-shell::before,
+.iso-car-shell::after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #03060d;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--iso-car-accent) 18%, rgba(255, 255, 255, 0.12));
+}
+
+.iso-car-shell::before {
+  left: 14px;
+}
+
+.iso-car-shell::after {
+  right: 12px;
+}
+
+.iso-car-roof {
+  inset: 4px 10px 8px 12px;
+  border-radius: 14px 18px 10px 10px;
+  border: 1px solid color-mix(in srgb, var(--iso-car-accent) 26%, transparent);
+  opacity: 0.42;
+}
+
+.iso-car-cabin {
+  left: 28px;
+  top: 9px;
+  width: 38px;
+  height: 14px;
+  border-radius: 12px 12px 6px 6px;
+  background: rgba(224, 244, 255, 0.38);
+}
+
+.iso-car-stripe {
+  left: 18px;
+  right: 16px;
+  bottom: 9px;
+  height: 7px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--iso-car-accent) 58%, white 8%), transparent 94%);
+  opacity: 0.88;
+}
+
+.iso-car-wing {
+  left: 2px;
+  top: 17px;
+  width: 22px;
+  height: 12px;
+  border-radius: 10px 4px 4px 10px;
+  background: color-mix(in srgb, var(--iso-car-body) 74%, #0a1324);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--iso-car-accent) 18%, transparent);
+}
+
+.iso-car-meta {
+  left: 14px;
+  bottom: 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.iso-car-figure[data-silhouette="vector-brick"] .iso-car-shell {
+  width: 118px;
+  height: 50px;
+}
+
+.iso-car-figure[data-silhouette="vector-blade"] .iso-car-shell {
+  width: 124px;
+  height: 40px;
+}
+
+.iso-car-figure[data-silhouette="vector-dart"] .iso-car-shell {
+  width: 108px;
+  height: 42px;
+}
+
+.iso-car-figure[data-trim="hammer"] .iso-car-wing {
+  width: 30px;
+}
+
+.iso-car-figure[data-trim="spear"] .iso-car-stripe {
+  left: 24px;
+  right: 12px;
 }
 
 .style-preview-live[data-slot="trail"] .style-preview-car,

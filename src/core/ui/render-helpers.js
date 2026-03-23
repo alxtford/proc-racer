@@ -16,6 +16,29 @@ export function renderSummaryGrid(items = []) {
   `).join("");
 }
 
+export function renderIsoCarFigure(car, options = {}) {
+  if (!car) return `<div class="iso-car-figure iso-car-figure-empty"><span>No chassis online</span></div>`;
+  const def = car.def || car;
+  const body = car.visuals?.bodyColor || car.cosmetics?.bodyColor || def.color || "#ffb100";
+  const accent = car.visuals?.accentColor || car.cosmetics?.accentColor || def.color || "#8df7ff";
+  const silhouette = def.silhouetteKit || "vector-touring";
+  const trim = def.trimProfile || "alloy";
+  const role = options.role || car.role || def.role || "Selected";
+  return `
+    <div class="iso-car-figure" data-silhouette="${silhouette}" data-trim="${trim}" style="--iso-car-body:${body};--iso-car-accent:${accent};">
+      <div class="iso-car-shadow"></div>
+      <div class="iso-car-trail"></div>
+      <div class="iso-car-shell">
+        <span class="iso-car-roof"></span>
+        <span class="iso-car-cabin"></span>
+        <span class="iso-car-stripe"></span>
+        <span class="iso-car-wing"></span>
+      </div>
+      <div class="iso-car-meta">${role}</div>
+    </div>
+  `;
+}
+
 export function renderRecentRuns(runs = []) {
   if (!runs.length) {
     return [

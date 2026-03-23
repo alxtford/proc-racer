@@ -1,9 +1,9 @@
 import { chromium } from "playwright";
 import fs from "node:fs/promises";
-import { waitForMenuStage } from "./menu-helpers.mjs";
+import { clickFirst, waitForMenuStage } from "./menu-helpers.mjs";
 
 const browser = await chromium.launch({ headless: true });
-const url = "http://127.0.0.1:4173";
+const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
 const allTargets = [
   { title: "Forgewash", label: "industrial" },
   { title: "Sunspike Draft", label: "freeway" },
@@ -15,9 +15,32 @@ const targets = targetFilter
   : allTargets;
 const results = [];
 
+async function selectBoardEvent(page, title) {
+  await clickFirst(page, ['[data-route-section="board"]']);
+  await page.waitForSelector(".event-card");
+  const nextButton = page.locator("#home-board-next");
+
+  while (true) {
+    const eventCard = page.locator(".event-card", { hasText: title }).first();
+    if (await eventCard.count()) {
+      await eventCard.click();
+      return;
+    }
+    if (!await nextButton.count()) break;
+    if (await nextButton.isDisabled()) break;
+    await nextButton.click();
+    await page.waitForTimeout(120);
+  }
+
+  throw new Error(`Unable to find board event: ${title}`);
+}
+
 for (const target of targets) {
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-  await page.goto(url, { waitUntil: "domcontentloaded" });
+  await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.localStorage.clear());
+  await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(500);
   await page.evaluate(() => {
     const raw = localStorage.getItem("proc-racer-save-v5");
@@ -31,10 +54,11 @@ for (const target of targets) {
   const startButton = page.locator("#start-btn");
   if (await startButton.count()) await startButton.click();
   await waitForMenuStage(page, "hub");
-  await page.waitForSelector(".event-card");
-  await page.locator(".event-card", { hasText: target.title }).click();
+  await selectBoardEvent(page, target.title);
   await page.waitForTimeout(100);
   const before = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
+  await clickFirst(page, ['[data-route-section="launch"]']);
+  await page.waitForSelector("#launch-btn", { state: "visible" });
   await page.click("#launch-btn");
   await page.waitForTimeout(120);
   await page.evaluate(() => window.advanceTime(3600));

@@ -13,7 +13,8 @@ import {
   getRollReadyStatus,
   toRuntimeCarDef,
 } from "./core/garage.js";
-import { buildTrack, getSectorAtProgress, nearestPathInfo, samplePath } from "./core/generator.js";
+import { buildTrack, getSectorAtProgress, nearestPathInfo, samplePath, sampleTrackHeight } from "./core/generator.js";
+import { buildIsoRibbon, ISO_PROJECTION, projectIsoPoint } from "./core/isometric.js";
 import { computeLeaderboard, createCar, finalizeFinish, handleCarCollisions, integrateCar, updatePickupRespawns } from "./core/gameplay.js";
 import { getGhostKey, loadSave, persistSave, pushRunHistory } from "./core/save.js";
 import { buyCosmetic, equipCosmetic, getEquippedCosmeticDefs, getGarageCarStyle } from "./core/styleLocker.js";
@@ -38,7 +39,7 @@ const state = {
   height: 720,
   pixelRatio: 1,
   viewScale: 1,
-  camera: { x: 0, y: 0, shake: 0 },
+  camera: { x: 0, y: 0, z: 0, shake: 0, jitterX: 0, jitterY: 0 },
   selectedEventIndex: 0,
   selectedCarId: initialSave.selectedCarId,
   menuStage: "splash",
@@ -1130,37 +1131,6 @@ function getTrackBounds(track) {
     maxY: Math.max(acc.maxY, point.y),
   }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
   return track.bounds;
-}
-
-function traceTrackPath(track) {
-  ctx.beginPath();
-  track.points.forEach((point, index) => {
-    if (index === 0) ctx.moveTo(point.x, point.y);
-    else ctx.lineTo(point.x, point.y);
-  });
-  if (track.type === "circuit") ctx.closePath();
-}
-
-function sectorStrokeColor(tag, alpha = 0.28) {
-  if (tag === "high-speed") return `rgba(255,211,110,${alpha})`;
-  if (tag === "technical") return `rgba(141,247,255,${alpha})`;
-  if (tag === "recovery") return `rgba(80,249,216,${alpha})`;
-  return `rgba(255,109,127,${alpha})`;
-}
-
-function getSectorSpan(sector, closed) {
-  if (!sector) return 0;
-  return closed
-    ? ((sector.end - sector.start + 1) % 1 || 1)
-    : Math.max(0, sector.end - sector.start);
-}
-
-function getSectorSampleT(sector, mix, closed) {
-  const span = getSectorSpan(sector, closed);
-  const clampedMix = clamp(mix, 0, 1);
-  return closed
-    ? ((sector.start + span * clampedMix) % 1 + 1) % 1
-    : clamp(sector.start + span * clampedMix, 0, 1);
 }
 
 function withAlpha(color, alpha) {
@@ -2685,20 +2655,18 @@ function setCamera() {
   if (state.player && state.mode !== "menu") {
     const forward = { x: Math.cos(state.player.angle), y: Math.sin(state.player.angle) };
     focus = {
-      x: state.player.x + forward.x * 110,
-      y: state.player.y + forward.y * 110,
+      x: state.player.x + forward.x * 170,
+      y: state.player.y + forward.y * 170,
     };
   }
   const shakeScale = state.save.settings.reducedShake ? 0.32 : 1;
   state.camera.x = lerp(state.camera.x, focus.x, 0.08);
   state.camera.y = lerp(state.camera.y, focus.y, 0.08);
-  const jitterX = state.camera.shake > 0 ? (Math.random() - 0.5) * state.camera.shake * 1.4 * shakeScale : 0;
-  const jitterY = state.camera.shake > 0 ? (Math.random() - 0.5) * state.camera.shake * 1.4 * shakeScale : 0;
-  state.viewScale = clamp(Math.min(state.width / 1280, state.height / 720), 0.74, 1.2);
-  ctx.setTransform(state.pixelRatio, 0, 0, state.pixelRatio, 0, 0);
-  ctx.translate(state.width / 2 + jitterX, state.height / 2 + jitterY);
-  ctx.scale(state.viewScale, state.viewScale);
-  ctx.translate(-state.camera.x, -state.camera.y);
+  const focusT = state.player ? state.player.pathT : 0;
+  state.camera.z = lerp(state.camera.z, sampleTrackHeight(state.track, focusT) + 34, 0.12);
+  state.camera.jitterX = state.camera.shake > 0 ? (Math.random() - 0.5) * state.camera.shake * 1.6 * shakeScale : 0;
+  state.camera.jitterY = state.camera.shake > 0 ? (Math.random() - 0.5) * state.camera.shake * 1.2 * shakeScale : 0;
+  state.viewScale = clamp(Math.min(state.width / 1280, state.height / 720), 0.54, 0.84);
 }
 
 function drawTrack() {
@@ -3481,14 +3449,435 @@ function drawMinimap() {
   ctx.fillText("TRACK", x + 10, y + 14);
 }
 
+function getIsoViewport() {
+  return {
+    x: state.width * 0.5 + (state.camera.jitterX || 0),
+    y: state.height * 0.58 + (state.camera.jitterY || 0),
+  };
+}
+
+function projectWorldPoint(x, y, z = 0) {
+  return projectIsoPoint(x, y, z, state.camera, getIsoViewport(), state.viewScale, ISO_PROJECTION);
+}
+
+function traceScreenPolygon(points) {
+  if (!points?.length) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let index = 1; index < points.length; index += 1) ctx.lineTo(points[index].x, points[index].y);
+  ctx.closePath();
+}
+
+function traceScreenRibbon(ribbon) {
+  if (!ribbon?.left?.length) return;
+  ctx.beginPath();
+  ctx.moveTo(ribbon.left[0].x, ribbon.left[0].y);
+  for (let index = 1; index < ribbon.left.length; index += 1) ctx.lineTo(ribbon.left[index].x, ribbon.left[index].y);
+  for (let index = ribbon.right.length - 1; index >= 0; index -= 1) ctx.lineTo(ribbon.right[index].x, ribbon.right[index].y);
+  ctx.closePath();
+}
+
+function traceProjectedLine(points) {
+  if (!points?.length) return;
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let index = 1; index < points.length; index += 1) ctx.lineTo(points[index].x, points[index].y);
+}
+
+function getProjectedTrackLine(track) {
+  return track.points.map((point) => projectWorldPoint(point.x, point.y, point.z || 0));
+}
+
+function getGroundHeightAtPosition(x, y) {
+  if (!state.track) return 0;
+  const info = nearestPathInfo(state.track, x, y);
+  return sampleTrackHeight(state.track, info.t);
+}
+
+function drawIsoVerticalFeature(feature, theme, accent, fill, scaleBoost = 1) {
+  const base = projectWorldPoint(feature.x, feature.y, feature.z || 0);
+  const top = projectWorldPoint(feature.x, feature.y, (feature.z || 0) + (feature.height || feature.size * 1.8));
+  const footprint = (feature.size || 24) * 0.34 * scaleBoost;
+  const leftBase = projectWorldPoint(feature.x - footprint * 0.55, feature.y + footprint * 0.55, feature.z || 0);
+  const rightBase = projectWorldPoint(feature.x + footprint * 0.7, feature.y - footprint * 0.7, feature.z || 0);
+  const leftTop = projectWorldPoint(feature.x - footprint * 0.55, feature.y + footprint * 0.55, (feature.z || 0) + (feature.height || feature.size * 1.8));
+  const rightTop = projectWorldPoint(feature.x + footprint * 0.7, feature.y - footprint * 0.7, (feature.z || 0) + (feature.height || feature.size * 1.8));
+
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineWidth = Math.max(1.2, state.viewScale * 2.2);
+  ctx.strokeStyle = withAlpha(accent, 0.58);
+  ctx.fillStyle = withAlpha(fill, 0.88);
+
+  traceScreenPolygon([leftBase, rightBase, rightTop, leftTop]);
+  ctx.fillStyle = withAlpha(fill, 0.64);
+  ctx.fill();
+  ctx.stroke();
+
+  traceScreenPolygon([base, rightBase, rightTop, top]);
+  ctx.fillStyle = withAlpha(fill, 0.8);
+  ctx.fill();
+  ctx.stroke();
+
+  traceScreenPolygon([base, leftBase, leftTop, top]);
+  ctx.fillStyle = withAlpha(fill, 0.54);
+  ctx.fill();
+  ctx.stroke();
+
+  if (feature.kind === "pine-shoulder") {
+    ctx.fillStyle = withAlpha(accent, 0.22);
+    traceScreenPolygon([
+      projectWorldPoint(feature.x, feature.y, (feature.z || 0) + feature.height * 0.98),
+      projectWorldPoint(feature.x + footprint * 0.8, feature.y - footprint * 0.8, (feature.z || 0) + feature.height * 0.4),
+      projectWorldPoint(feature.x, feature.y, (feature.z || 0) + feature.height * 0.22),
+      projectWorldPoint(feature.x - footprint * 0.8, feature.y + footprint * 0.8, (feature.z || 0) + feature.height * 0.4),
+    ]);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawIsoScenery(track, theme) {
+  const scenery = [
+    ...(track.landmarkAnchors || []).map((anchor) => ({ ...anchor, visual: "landmark" })),
+    ...(track.props || []).filter((prop) => prop.alive).map((prop) => ({ ...prop, visual: "prop" })),
+  ].map((feature) => ({
+    ...feature,
+    screen: projectWorldPoint(feature.x, feature.y, (feature.z || 0) + (feature.visual === "landmark" ? feature.height * 0.08 : 0)),
+  })).sort((a, b) => a.screen.y - b.screen.y);
+
+  for (const feature of scenery) {
+    const accent = feature.sectorTag === "high-speed"
+      ? "#ffd36e"
+      : feature.sectorTag === "technical"
+        ? theme.trackEdge
+        : feature.side === "outer"
+          ? theme.decoA
+          : theme.decoB;
+    const fill = feature.visual === "landmark" ? theme.inside : withAlpha(theme.inside, 0.82);
+    drawIsoVerticalFeature(feature, theme, accent, fill, feature.visual === "landmark" ? 1.18 : 0.9);
+  }
+}
+
+function drawIsoGate(gate, accent = "#8df7ff") {
+  if (!gate) return;
+  const left = projectWorldPoint(
+    gate.x + gate.normal.x * gate.halfWidth,
+    gate.y + gate.normal.y * gate.halfWidth,
+    gate.z || 0,
+  );
+  const right = projectWorldPoint(
+    gate.x - gate.normal.x * gate.halfWidth,
+    gate.y - gate.normal.y * gate.halfWidth,
+    gate.z || 0,
+  );
+  ctx.save();
+  ctx.strokeStyle = withAlpha(accent, 0.92);
+  ctx.lineWidth = Math.max(4, state.viewScale * 7);
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = withAlpha(accent, 0.48);
+  ctx.beginPath();
+  ctx.moveTo(left.x, left.y);
+  ctx.lineTo(right.x, right.y);
+  ctx.stroke();
+  const blocks = 8;
+  const normal = normalize(right.y - left.y, left.x - right.x);
+  for (let index = 0; index < blocks; index += 1) {
+    const mix = index / blocks;
+    const nextMix = (index + 1) / blocks;
+    const a = { x: lerp(left.x, right.x, mix), y: lerp(left.y, right.y, mix) };
+    const b = { x: lerp(left.x, right.x, nextMix), y: lerp(left.y, right.y, nextMix) };
+    const depth = 6;
+    ctx.fillStyle = index % 2 === 0 ? "rgba(247,242,255,0.92)" : withAlpha(accent, 0.9);
+    traceScreenPolygon([
+      { x: a.x + normal.x * depth, y: a.y + normal.y * depth },
+      { x: b.x + normal.x * depth, y: b.y + normal.y * depth },
+      { x: b.x - normal.x * depth, y: b.y - normal.y * depth },
+      { x: a.x - normal.x * depth, y: a.y - normal.y * depth },
+    ]);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawIsoTrackWorld() {
+  const track = state.track;
+  const theme = track.theme;
+  const topRibbon = buildIsoRibbon(track, state.camera, getIsoViewport(), state.viewScale);
+  const lowerRibbon = buildIsoRibbon(track, state.camera, getIsoViewport(), state.viewScale, {
+    heightOffset: -ISO_PROJECTION.roadDepth,
+    bankScale: 0.56,
+    width: track.width * 1.02,
+  });
+
+  drawIsoScenery(track, theme);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  traceScreenRibbon(lowerRibbon);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.shadowBlur = 28;
+  ctx.shadowColor = theme.glow;
+  ctx.fillStyle = theme.track;
+  traceScreenRibbon(topRibbon);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = withAlpha(theme.trackEdge, 0.8);
+  ctx.lineWidth = Math.max(3, state.viewScale * 6);
+  traceScreenRibbon(topRibbon);
+  ctx.stroke();
+
+  const projectedLine = getProjectedTrackLine(track);
+  ctx.strokeStyle = "rgba(255,255,255,0.13)";
+  ctx.lineWidth = Math.max(1.2, state.viewScale * 2.2);
+  ctx.setLineDash([18, 16]);
+  traceProjectedLine(projectedLine);
+  if (track.type === "circuit") ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  if (state.currentEvent?.guided) {
+    ctx.strokeStyle = "rgba(141,247,255,0.28)";
+    ctx.lineWidth = Math.max(1.4, state.viewScale * 2.6);
+    ctx.setLineDash([10, 8]);
+    traceProjectedLine(projectedLine);
+    if (track.type === "circuit") ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  for (const strip of track.surgeStrips || []) {
+    const from = projectWorldPoint(
+      strip.x - strip.tangent.x * strip.length * 0.5,
+      strip.y - strip.tangent.y * strip.length * 0.5,
+      (strip.z || getGroundHeightAtPosition(strip.x, strip.y)) + 4,
+    );
+    const to = projectWorldPoint(
+      strip.x + strip.tangent.x * strip.length * 0.5,
+      strip.y + strip.tangent.y * strip.length * 0.5,
+      (strip.z || getGroundHeightAtPosition(strip.x, strip.y)) + 4,
+    );
+    ctx.strokeStyle = withAlpha(strip.color, 0.76);
+    ctx.lineWidth = Math.max(2.2, state.viewScale * 4);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  }
+
+  for (const hazard of state.hazards) {
+    const point = projectWorldPoint(hazard.x, hazard.y, (hazard.z || getGroundHeightAtPosition(hazard.x, hazard.y)) + 3);
+    const radius = Math.max(8, hazard.radius * state.viewScale * 0.2);
+    ctx.strokeStyle = "rgba(255,109,127,0.62)";
+    ctx.fillStyle = "rgba(255,109,127,0.14)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, radius, 0, TAU);
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  for (const pickup of state.pickups) {
+    if (!pickup.active) continue;
+    const def = PICKUP_DEFS[pickup.kind];
+    const point = projectWorldPoint(pickup.x, pickup.y, (pickup.z || getGroundHeightAtPosition(pickup.x, pickup.y) + 14));
+    const radius = pickup.guidedBeacon ? 16 : 10;
+    ctx.save();
+    ctx.translate(point.x, point.y);
+    ctx.rotate(state.ambientTime * 0.9);
+    ctx.strokeStyle = def.color;
+    ctx.lineWidth = Math.max(2, state.viewScale * 3.2);
+    ctx.shadowBlur = 16;
+    ctx.shadowColor = def.color;
+    traceScreenPolygon([
+      { x: 0, y: -radius },
+      { x: radius * 0.8, y: 0 },
+      { x: 0, y: radius },
+      { x: -radius * 0.8, y: 0 },
+    ]);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawIsoGate(track.startLine, track.type === "circuit" ? "#ffd36e" : "#8df7ff");
+  if (track.type === "sprint") drawIsoGate(track.finishLine, "#ff6d7f");
+}
+
+function projectCarLocalPoint(car, localX, localY, zOffset = 0) {
+  const cos = Math.cos(car.angle);
+  const sin = Math.sin(car.angle);
+  return projectWorldPoint(
+    car.x + cos * localX - sin * localY,
+    car.y + sin * localX + cos * localY,
+    (car.groundZ || 0) + zOffset,
+  );
+}
+
+function buildProjectedCarPolygon(car, polygon, zOffset = 0) {
+  return polygon.map(([x, y]) => projectCarLocalPoint(car, x, y, zOffset));
+}
+
+function drawIsoTrail(car) {
+  if (car.speedTrail.length < 2) return;
+  const trailColor = getCarTrailColor(car);
+  const design = getCarDesign(car);
+  const points = car.speedTrail.map((sample) => {
+    const angle = Number.isFinite(sample.angle) ? sample.angle : car.angle;
+    const z = sample.z ?? getGroundHeightAtPosition(sample.x, sample.y);
+    return projectWorldPoint(
+      sample.x + Math.cos(angle) * design.trailMountX,
+      sample.y + Math.sin(angle) * design.trailMountX,
+      z + 6 + (sample.energy || 0) * 10,
+    );
+  });
+  ctx.save();
+  ctx.globalCompositeOperation = "screen";
+  for (let index = 1; index < points.length; index += 1) {
+    const fade = index / points.length;
+    ctx.strokeStyle = withAlpha(trailColor, 0.2 + fade * 0.46);
+    ctx.lineWidth = Math.max(1.6, state.viewScale * (2.2 + fade * 4.2));
+    ctx.beginPath();
+    ctx.moveTo(points[index - 1].x, points[index - 1].y);
+    ctx.lineTo(points[index].x, points[index].y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawIsoCar(car, ghost = false) {
+  if (!car) return;
+  const design = getCarDesign(car);
+  const bodyColor = ghost ? "rgba(255,255,255,0.06)" : car.destroyed ? "#090d16" : getCarBodyColor(car);
+  const accentColor = ghost ? "rgba(255,255,255,0.78)" : getCarAccentColor(car);
+  const base = buildProjectedCarPolygon(car, design.tub, ghost ? 8 : 6);
+  const top = buildProjectedCarPolygon(car, design.tub, ghost ? 18 : 18);
+  const canopy = buildProjectedCarPolygon(car, design.canopy, ghost ? 24 : 25);
+  const center = projectWorldPoint(car.x, car.y, (car.groundZ || 0) + 10);
+
+  if (!ghost) {
+    drawIsoTrail(car);
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y + state.viewScale * 10, car.length * state.viewScale * 0.18, design.width * state.viewScale * 0.14, 0, 0, TAU);
+    ctx.fill();
+  }
+
+  ctx.save();
+  ctx.globalAlpha = ghost ? 0.5 : car.invuln > 0 ? 0.66 + Math.sin(state.ambientTime * 24) * 0.2 : 1;
+  for (let index = 0; index < base.length; index += 1) {
+    const nextIndex = (index + 1) % base.length;
+    traceScreenPolygon([base[index], base[nextIndex], top[nextIndex], top[index]]);
+    ctx.fillStyle = withAlpha(accentColor, ghost ? 0.12 : 0.16 + (index % 2) * 0.05);
+    ctx.fill();
+  }
+  ctx.shadowBlur = ghost ? 0 : 18;
+  ctx.shadowColor = withAlpha(accentColor, 0.4);
+  traceScreenPolygon(top);
+  ctx.fillStyle = ghost ? bodyColor : car.chassisFlash > 0 ? "#ffffff" : bodyColor;
+  ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = withAlpha(accentColor, ghost ? 0.7 : 0.74);
+  ctx.lineWidth = Math.max(1.2, state.viewScale * 2.4);
+  ctx.stroke();
+
+  traceScreenPolygon(canopy);
+  ctx.fillStyle = ghost ? "rgba(255,255,255,0.02)" : withAlpha("#08101d", 0.94);
+  ctx.fill();
+  if (!ghost) {
+    ctx.strokeStyle = withAlpha("#f8fbff", 0.18);
+    ctx.lineWidth = Math.max(1, state.viewScale * 1.6);
+    ctx.stroke();
+  }
+
+  if (!ghost && car.pickup) {
+    ctx.strokeStyle = PICKUP_DEFS[car.pickup].color;
+    ctx.lineWidth = Math.max(1.4, state.viewScale * 2.4);
+    ctx.beginPath();
+    ctx.ellipse(center.x, center.y - state.viewScale * 8, car.length * state.viewScale * 0.2, design.width * state.viewScale * 0.18, 0, 0, TAU);
+    ctx.stroke();
+  }
+  if (!ghost && car.rival) {
+    ctx.strokeStyle = "rgba(255,92,203,0.64)";
+    ctx.lineWidth = Math.max(1.1, state.viewScale * 2);
+    traceScreenPolygon(base);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawIsoGhost(sample) {
+  if (!sample) return;
+  const ghostCar = {
+    ...sample,
+    def: { maxSpeed: 356, accel: 448, durability: 122, grip: 7.2, bodyStyle: "touring", visualLength: 42, visualWidth: 22 },
+    length: 42,
+    width: 22,
+    groundZ: getGroundHeightAtPosition(sample.x, sample.y),
+  };
+  drawIsoCar(ghostCar, true);
+}
+
+function drawIsoEffects() {
+  for (const piece of state.debris) {
+    const point = projectWorldPoint(piece.x, piece.y, getGroundHeightAtPosition(piece.x, piece.y) + (piece.size || 4));
+    ctx.save();
+    ctx.translate(point.x, point.y);
+    ctx.rotate(piece.life * 4);
+    ctx.globalAlpha = clamp(piece.life / 2, 0.15, 0.9);
+    ctx.fillStyle = piece.color;
+    ctx.beginPath();
+    ctx.moveTo(-piece.size * 0.55, -piece.size * 0.24);
+    ctx.lineTo(piece.size * 0.48, -piece.size * 0.4);
+    ctx.lineTo(piece.size * 0.62, piece.size * 0.18);
+    ctx.lineTo(-piece.size * 0.4, piece.size * 0.42);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  for (const effect of state.fx) {
+    const point = projectWorldPoint(effect.x, effect.y, (effect.z ?? getGroundHeightAtPosition(effect.x, effect.y)) + (effect.kind === "flame" ? 12 : 8));
+    ctx.save();
+    ctx.translate(point.x, point.y);
+    ctx.globalAlpha = clamp(effect.life * 1.8, 0, 1);
+    ctx.strokeStyle = effect.color;
+    ctx.fillStyle = effect.color;
+    const radius = Math.max(4, effect.radius * state.viewScale * 0.26);
+    if (effect.kind === "flame" || effect.kind === "smoke") {
+      ctx.rotate(effect.angle || 0);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, radius * (effect.kind === "flame" ? 1.8 : 1.2), radius * 0.7, 0, 0, TAU);
+      if (effect.kind === "flame") ctx.fill();
+      else ctx.stroke();
+    } else if (effect.kind === "spark" || effect.kind === "ember") {
+      ctx.beginPath();
+      ctx.arc(0, 0, radius * 0.44, 0, TAU);
+      ctx.fill();
+    } else {
+      ctx.lineWidth = Math.max(1.6, state.viewScale * 2.2);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, TAU);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
 function renderRaceWorld() {
   if (!state.track || (state.mode !== "race" && state.mode !== "results" && state.mode !== "paused")) return;
   setCamera();
-  drawTrack();
-  drawGhost(getGhostSample());
-  for (const car of state.cars.filter((item) => !item.isPlayer)) drawCar(car);
-  if (state.player) drawCar(state.player);
-  drawEffects();
+  drawIsoTrackWorld();
+  drawIsoGhost(getGhostSample());
+  const renderCars = [...state.cars.filter((item) => !item.isPlayer), state.player]
+    .filter(Boolean)
+    .map((car) => ({ car, depth: projectWorldPoint(car.x, car.y, car.groundZ || 0).y }))
+    .sort((a, b) => a.depth - b.depth);
+  for (const item of renderCars) drawIsoCar(item.car);
+  drawIsoEffects();
 }
 
 function render() {

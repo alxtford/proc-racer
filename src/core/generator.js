@@ -814,6 +814,190 @@ function buildSurgeStrips(points, event, sectors, width, rng) {
   return strips;
 }
 
+function getPointIndex(points, index, closed) {
+  if (closed) return points[(index + points.length) % points.length];
+  return points[clamp(index, 0, points.length - 1)];
+}
+
+function getLocalCurveMagnitude(points, index, closed) {
+  const prev = getPointIndex(points, index - 1, closed);
+  const current = getPointIndex(points, index, closed);
+  const next = getPointIndex(points, index + 1, closed);
+  const prevDir = normalize(current.x - prev.x, current.y - prev.y);
+  const nextDir = normalize(next.x - current.x, next.y - current.y);
+  return clamp(Math.abs(prevDir.x * nextDir.y - prevDir.y * nextDir.x), 0, 1);
+}
+
+function smoothSeries(values, closed, passes = 4) {
+  let current = values.slice();
+  for (let pass = 0; pass < passes; pass += 1) {
+    current = current.map((value, index) => {
+      const prev = closed ? current[(index - 1 + current.length) % current.length] : current[Math.max(0, index - 1)];
+      const next = closed ? current[(index + 1) % current.length] : current[Math.min(current.length - 1, index + 1)];
+      return value * 0.56 + prev * 0.22 + next * 0.22;
+    });
+  }
+  return current;
+}
+
+function clampElevationGrades(points, heights, closed, maxGrade = 0.2) {
+  const limited = heights.slice();
+  const maxIndex = closed ? limited.length : limited.length - 1;
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (let index = 0; index < maxIndex; index += 1) {
+      const nextIndex = closed ? (index + 1) % limited.length : index + 1;
+      if (nextIndex >= limited.length) continue;
+      const currentPoint = points[index];
+      const nextPoint = points[nextIndex];
+      const span = Math.max(1, Math.hypot(nextPoint.x - currentPoint.x, nextPoint.y - currentPoint.y));
+      const maxDelta = span * maxGrade;
+      const delta = limited[nextIndex] - limited[index];
+      if (Math.abs(delta) <= maxDelta) continue;
+      limited[nextIndex] = limited[index] + Math.sign(delta) * maxDelta;
+    }
+  }
+  return limited;
+}
+
+function buildLandmarkAnchors(points, elevationSamples, event, biome, width, rng) {
+  const closed = event.type === "circuit";
+  const stride = biome.id === "freeway" ? 9 : biome.id === "industrial" ? 10 : 8;
+  const anchors = [];
+  for (let index = 0; index < elevationSamples.length; index += stride) {
+    const sample = elevationSamples[index];
+    const point = sample.point;
+    const next = samplePath(points, closed ? sample.t + 0.01 : clamp(sample.t + 0.01, 0, 1), closed);
+    const tangent = normalize(next.x - point.x, next.y - point.y);
+    const normal = { x: -tangent.y, y: tangent.x };
+    const side = sample.seed > 0.52 ? 1 : -1;
+    const offset = width * (1.52 + sample.curveAbs * 0.36) + 96 + sample.seed * 88;
+    anchors.push({
+      id: `landmark-${index}`,
+      kind: biome.landmarkKits[(index + Math.floor(sample.seed * biome.landmarkKits.length)) % biome.landmarkKits.length],
+      x: point.x + normal.x * offset * side,
+      y: point.y + normal.y * offset * side,
+      z: sample.z + 12 + sample.seed * 34,
+      size: 40 + sample.straightness * 26,
+      height: 88 + sample.curveAbs * 42 + sample.seed * 24,
+      rotation: Math.atan2(tangent.y, tangent.x) * (biome.id === "freeway" ? 0.06 : 0.1),
+      side: side > 0 ? "outer" : "inner",
+      sectorTag: sample.sectorTag,
+    });
+  }
+  return anchors;
+}
+
+function buildElevationProfile(points, event, sectors, biome, width, rng) {
+  const closed = event.type === "circuit";
+  const settings = biome.elevationProfile || {};
+  const amplitude = settings.amplitude || 72;
+  const crestBias = settings.crestBias || 0.3;
+  const bankBias = settings.bankBias || 0.75;
+  const longWave = settings.longWave || 1.2;
+  const shortWave = settings.shortWave || 2.1;
+  const count = points.length;
+  const phaseA = rng() * TAU;
+  const phaseB = rng() * TAU;
+  const phaseC = rng() * TAU;
+  const rawHeights = Array.from({ length: count }, (_, index) => {
+    const t = closed ? index / count : index / Math.max(1, count - 1);
+    const sector = getSectorForT({ sectors }, t);
+    const curveAbs = getLocalCurveMagnitude(points, index, closed);
+    const longWaveSample = Math.sin(t * TAU * longWave + phaseA) * 0.55;
+    const shortWaveSample = Math.sin(t * TAU * shortWave + phaseB) * 0.24;
+    const biasWave = Math.cos(t * TAU * (0.58 + crestBias) + phaseC) * 0.18;
+    const sectorLift = sector.tag === "hazard"
+      ? 0.42
+      : sector.tag === "technical"
+        ? 0.26
+        : sector.tag === "high-speed"
+          ? 0.14
+          : -0.08;
+    const biomeLift = biome.id === "industrial"
+      ? Math.sin(t * TAU * 0.8 + phaseA * 0.5) * 0.12
+      : biome.id === "freeway"
+        ? Math.cos(t * TAU * 0.56 + phaseB * 0.4) * 0.17
+        : Math.sin(t * TAU * 0.94 + phaseC * 0.32) * 0.22;
+    return (longWaveSample + shortWaveSample + biasWave + sectorLift + curveAbs * (0.22 + crestBias * 0.32) + biomeLift) * amplitude;
+  });
+
+  let heights = smoothSeries(rawHeights, closed, 5);
+  heights = clampElevationGrades(points, heights, closed, biome.id === "void" ? 0.24 : 0.2);
+  heights = smoothSeries(heights, closed, 2);
+
+  const midpoint = heights.reduce((sum, value) => sum + value, 0) / Math.max(1, heights.length);
+  heights = heights.map((value) => value - midpoint);
+  if (!closed) {
+    const startHeight = heights[0];
+    const endHeight = heights[heights.length - 1];
+    heights = heights.map((value, index) => {
+      const t = heights.length <= 1 ? 0 : index / (heights.length - 1);
+      return value - lerp(startHeight, endHeight * 0.35, t);
+    });
+    heights[0] = 0;
+  }
+
+  const samples = points.map((point, index) => {
+    const t = closed ? index / count : index / Math.max(1, count - 1);
+    const nextIndex = closed ? (index + 1) % count : Math.min(count - 1, index + 1);
+    const prevIndex = closed ? (index - 1 + count) % count : Math.max(0, index - 1);
+    const nextPoint = points[nextIndex];
+    const prevPoint = points[prevIndex];
+    const span = Math.max(1, Math.hypot(nextPoint.x - point.x, nextPoint.y - point.y));
+    const grade = (heights[nextIndex] - heights[index]) / span;
+    const sector = getSectorForT({ sectors }, t);
+    const tangent = normalize(nextPoint.x - prevPoint.x, nextPoint.y - prevPoint.y);
+    const curveAbs = getLocalCurveMagnitude(points, index, closed);
+    const straightness = 1 - clamp(curveAbs * 2.4, 0, 1);
+    return {
+      t,
+      point,
+      z: heights[index],
+      height: heights[index],
+      grade,
+      bank: curveAbs * width * 0.08 * bankBias * (sector.tag === "technical" ? 1.12 : sector.tag === "high-speed" ? 0.82 : 0.94),
+      sectorTag: sector.tag,
+      tangent,
+      curveAbs,
+      straightness,
+      seed: rng(),
+    };
+  });
+
+  return {
+    min: Math.min(...heights),
+    max: Math.max(...heights),
+    amplitude,
+    samples,
+    landmarkAnchors: buildLandmarkAnchors(points, samples, event, biome, width, rng),
+  };
+}
+
+function sampleElevationSamples(samples, t, closed) {
+  if (!samples?.length) return { z: 0, height: 0, grade: 0, bank: 0 };
+  const count = samples.length;
+  const scaled = closed ? wrapT(t) * count : clamp(t, 0, 1) * Math.max(1, count - 1);
+  const index = closed ? Math.floor(scaled) % count : clamp(Math.floor(scaled), 0, count - 1);
+  const nextIndex = closed ? (index + 1) % count : Math.min(count - 1, index + 1);
+  const mix = closed ? scaled - Math.floor(scaled) : scaled - index;
+  const a = samples[index];
+  const b = samples[nextIndex];
+  return {
+    z: lerp(a.z, b.z, mix),
+    height: lerp(a.height, b.height, mix),
+    grade: lerp(a.grade, b.grade, mix),
+    bank: lerp(a.bank, b.bank, mix),
+  };
+}
+
+export function sampleTrackHeight(track, t) {
+  return sampleElevationSamples(track?.elevationSamples || [], t, track?.type === "circuit").height;
+}
+
+export function sampleTrackBank(track, t) {
+  return sampleElevationSamples(track?.elevationSamples || [], t, track?.type === "circuit").bank;
+}
+
 export function buildTrack(event) {
   const rng = createRng(event.seed);
   const biome = BIOME_DEFS[event.biomeId];
@@ -822,6 +1006,13 @@ export function buildTrack(event) {
   const width = event.type === "circuit" ? 180 + rng() * 24 : 170 + rng() * 20;
   const anchors = chooseTrackAnchors(points, event, width);
   const sectors = buildSectors(points, event, rng, biome);
+  const elevation = buildElevationProfile(points, event, sectors, biome, width, rng);
+  const elevatedPoints = points.map((point, index) => ({
+    ...point,
+    z: elevation.samples[index]?.height || 0,
+    grade: elevation.samples[index]?.grade || 0,
+    bank: elevation.samples[index]?.bank || 0,
+  }));
   const checkpoints = buildOrderedCheckpoints(points, event, width, anchors.startT, anchors.finishT);
   const safeRespawnNodes = checkpoints.filter((checkpoint) => getSectorForT({ sectors }, checkpoint.t).tag !== "hazard");
   const surgeStrips = buildSurgeStrips(points, event, sectors, width, rng);
@@ -836,9 +1027,11 @@ export function buildTrack(event) {
     const normal = { x: -tangent.y, y: tangent.x };
     const sector = getSectorForT({ sectors }, t);
     const offset = event.guided && i === 0 ? 0 : (rng() - 0.5) * width * 0.45 * sector.pickupBias;
+    const height = sampleElevationSamples(elevation.samples, t, event.type === "circuit").height;
     pickups.push({
       x: point.x + normal.x * offset,
       y: point.y + normal.y * offset,
+      z: height + 14,
       t,
       kind: event.guided && i === 0 ? "shield" : choosePickupKind(event, sector, i),
       active: true,
@@ -854,9 +1047,11 @@ export function buildTrack(event) {
     const sector = pickOne(rng, sectors.filter((item) => item.tag === "hazard" || item.tag === "technical"));
     const t = sampleSectorT(sector, rng(), event.type === "circuit");
     const point = samplePath(points, t, event.type === "circuit");
+    const height = sampleElevationSamples(elevation.samples, t, event.type === "circuit").height;
     hazards.push({
       x: point.x + (rng() - 0.5) * width * 0.45,
       y: point.y + (rng() - 0.5) * width * 0.45,
+      z: height,
       radius: 18 + rng() * 16,
       damage: (8 + rng() * 5) * sector.hazardBias,
       t,
@@ -865,15 +1060,35 @@ export function buildTrack(event) {
   }
 
   const props = [];
+  const propTrack = { points, type: event.type };
+  const pushBeyondRoad = (candidateX, candidateY, pushNormal) => {
+    const minDistance = width * 0.72;
+    const placed = { x: candidateX, y: candidateY };
+    for (let iteration = 0; iteration < 4; iteration += 1) {
+      const info = nearestPathInfo(propTrack, placed.x, placed.y);
+      if (info.distance >= minDistance) break;
+      const away = normalize(placed.x - info.point.x, placed.y - info.point.y);
+      const direction = away.x || away.y ? away : pushNormal;
+      const push = minDistance - info.distance + 8;
+      placed.x += direction.x * push;
+      placed.y += direction.y * push;
+    }
+    return placed;
+  };
   for (let i = 0; i < points.length; i += 8) {
     const a = points[i];
     const b = points[(i + 1) % points.length];
     const tangent = normalize(b.x - a.x, b.y - a.y);
     const normal = { x: -tangent.y, y: tangent.x };
-    const distanceOut = width * (0.7 + rng() * 0.45);
+    const outerDistance = width * (1.28 + rng() * 0.84);
+    const innerDistance = width * (1.04 + rng() * 0.62);
+    const sample = elevation.samples[i];
+    const outerPlacement = pushBeyondRoad(a.x + normal.x * outerDistance, a.y + normal.y * outerDistance, normal);
+    const innerPlacement = pushBeyondRoad(a.x - normal.x * innerDistance, a.y - normal.y * innerDistance, { x: -normal.x, y: -normal.y });
     props.push({
-      x: a.x + normal.x * distanceOut,
-      y: a.y + normal.y * distanceOut,
+      x: outerPlacement.x,
+      y: outerPlacement.y,
+      z: (sample?.height || 0) + 4,
       size: 20 + rng() * 28,
       height: 28 + rng() * 38,
       rotation: rng() * TAU,
@@ -882,8 +1097,9 @@ export function buildTrack(event) {
       side: "outer",
     });
     props.push({
-      x: a.x - normal.x * distanceOut,
-      y: a.y - normal.y * distanceOut,
+      x: innerPlacement.x,
+      y: innerPlacement.y,
+      z: (sample?.height || 0) + 4,
       size: 16 + rng() * 24,
       height: 24 + rng() * 32,
       rotation: rng() * TAU,
@@ -895,22 +1111,38 @@ export function buildTrack(event) {
 
   const trackDescriptor = {
     eventId: event.id,
+    seed: event.seed,
     type: event.type,
     width,
     theme: biome,
-    points,
-    checkpoints,
+    points: elevatedPoints,
+    checkpoints: checkpoints.map((checkpoint) => ({
+      ...checkpoint,
+      z: sampleElevationSamples(elevation.samples, checkpoint.t, event.type === "circuit").height,
+    })),
     pickups,
     hazards,
     props,
+    landmarkAnchors: elevation.landmarkAnchors,
+    elevationSamples: elevation.samples,
+    heightRange: { min: elevation.min, max: elevation.max },
     sectors,
     surgeStrips,
-    safeRespawnNodes,
+    safeRespawnNodes: safeRespawnNodes.map((checkpoint) => ({
+      ...checkpoint,
+      z: sampleElevationSamples(elevation.samples, checkpoint.t, event.type === "circuit").height,
+    })),
     metrics,
     startT: anchors.startT,
     finishT: anchors.finishT,
-    startLine: anchors.startLine,
-    finishLine: anchors.finishLine,
+    startLine: {
+      ...anchors.startLine,
+      z: sampleElevationSamples(elevation.samples, anchors.startLine.t, event.type === "circuit").height,
+    },
+    finishLine: {
+      ...anchors.finishLine,
+      z: sampleElevationSamples(elevation.samples, anchors.finishLine.t, event.type === "circuit").height,
+    },
     modifiers: event.modifierIds.map((id) => MODIFIER_DEFS[id]),
     start: { x: anchors.startLine.x, y: anchors.startLine.y },
     finish: { x: anchors.finishLine.x, y: anchors.finishLine.y },

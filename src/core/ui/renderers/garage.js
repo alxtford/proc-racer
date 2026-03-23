@@ -1,4 +1,4 @@
-import { renderInfoButton, renderSummaryGrid, renderTags } from "../render-helpers.js";
+import { renderInfoButton, renderIsoCarFigure, renderSummaryGrid, renderTags } from "../render-helpers.js";
 
 function renderGarageHero(model) {
   return `
@@ -11,6 +11,9 @@ function renderGarageHero(model) {
         <div id="car-focus-badge" class="section-note">${model.hero?.badge || "No car selected"}</div>
       </div>
       <div class="garage-hero workspace-car-hero">
+        <div class="garage-hero-figure">
+          ${renderIsoCarFigure(model.selectedCar, { role: model.hero?.badge || "Selected" })}
+        </div>
         <div class="garage-hero-copy">
           <div id="car-focus-role" class="focus-meta">${model.hero?.role || ""}</div>
           <div id="car-focus-title" class="focus-title">${model.hero?.title || "No car selected"}</div>

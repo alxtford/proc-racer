@@ -1,4 +1,4 @@
-import { buildTrack } from "../generator.js";
+import { drawIsometricTrackPreview } from "../isometric.js";
 import {
   GARAGE_ROLL_COST,
   getFilledGarageCars,
@@ -988,97 +988,7 @@ function getBoardRerollTooltip(state) {
 }
 
 function drawTrackPreview(canvas, event) {
-  if (!canvas) return;
-  const context = canvas.getContext("2d");
-  if (!context) return;
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const cssWidth = Math.max(1, Math.round(canvas.clientWidth || canvas.width));
-  const cssHeight = Math.max(1, Math.round(canvas.clientHeight || canvas.height));
-  const targetWidth = Math.round(cssWidth * dpr);
-  const targetHeight = Math.round(cssHeight * dpr);
-  if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-  }
-  const width = cssWidth;
-  const height = cssHeight;
-  const track = buildTrack(event);
-  const bounds = track.points.reduce((acc, point) => ({
-    minX: Math.min(acc.minX, point.x),
-    minY: Math.min(acc.minY, point.y),
-    maxX: Math.max(acc.maxX, point.x),
-    maxY: Math.max(acc.maxY, point.y),
-  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
-  const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
-  const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
-  const padding = Math.max(18, Math.min(width, height) * 0.12);
-  const scale = Math.min((width - padding * 2) / contentWidth, (height - padding * 2) / contentHeight);
-  const offsetX = (width - contentWidth * scale) * 0.5 - bounds.minX * scale;
-  const offsetY = (height - contentHeight * scale) * 0.5 - bounds.minY * scale;
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.save();
-  context.scale(dpr, dpr);
-  context.fillStyle = track.theme.inside;
-  context.fillRect(0, 0, width, height);
-  const spotlight = context.createRadialGradient(width * 0.5, height * 0.48, 8, width * 0.5, height * 0.48, Math.max(width, height) * 0.66);
-  spotlight.addColorStop(0, "rgba(255,255,255,0.12)");
-  spotlight.addColorStop(0.34, track.theme.glow);
-  spotlight.addColorStop(1, "rgba(0,0,0,0)");
-  context.fillStyle = spotlight;
-  context.fillRect(0, 0, width, height);
-  context.fillStyle = track.theme.fog;
-  context.fillRect(0, 0, width, height);
-  context.save();
-  context.translate(offsetX, offsetY);
-  context.beginPath();
-  track.points.forEach((point, index) => {
-    const x = point.x * scale;
-    const y = point.y * scale;
-    if (index === 0) context.moveTo(x, y);
-    else context.lineTo(x, y);
-  });
-  if (track.type === "circuit") context.closePath();
-  context.shadowBlur = 22;
-  context.shadowColor = track.theme.glow;
-  context.strokeStyle = track.theme.track;
-  context.lineWidth = 10;
-  context.lineJoin = "round";
-  context.lineCap = "round";
-  context.stroke();
-  context.shadowBlur = 12;
-  context.strokeStyle = track.theme.trackEdge;
-  context.lineWidth = 3.2;
-  context.stroke();
-  if (event.guided) {
-    context.setLineDash([8, 6]);
-    context.strokeStyle = "rgba(47,246,255,0.78)";
-    context.lineWidth = 1.8;
-    context.stroke();
-    context.setLineDash([]);
-  }
-  const start = track.points[0];
-  if (start) {
-    const sx = start.x * scale;
-    const sy = start.y * scale;
-    context.fillStyle = track.theme.trackEdge;
-    context.beginPath();
-    context.arc(sx, sy, 5.5, 0, Math.PI * 2);
-    context.fill();
-    context.strokeStyle = "rgba(255,255,255,0.72)";
-    context.lineWidth = 1.4;
-    context.beginPath();
-    context.arc(sx, sy, 10, 0, Math.PI * 2);
-    context.stroke();
-  }
-  for (const pickup of track.pickups.slice(0, 4)) {
-    context.fillStyle = PICKUP_DEFS[pickup.kind].color;
-    context.beginPath();
-    context.arc(pickup.x * scale, pickup.y * scale, pickup.guidedBeacon ? 5 : 3, 0, Math.PI * 2);
-    context.fill();
-  }
-  context.restore();
-  context.restore();
+  drawIsometricTrackPreview(canvas, event);
 }
 
 export function createUi(state, callbacks = {}) {

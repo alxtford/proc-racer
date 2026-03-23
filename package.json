@@ -12,9 +12,12 @@
     "issues:board": "node scripts/codex-issues.mjs board",
     "issues:pick": "node scripts/codex-issues.mjs pick-next",
     "validate": "node scripts/run-validate-suite.mjs",
+    "validate:playwright": "playwright test",
     "validate:content": "node scripts/validate-content.mjs",
-    "validate:garage": "node scripts/check-garage-loop.mjs",
-    "validate:reroll": "node scripts/check-course-reroll.mjs"
+    "validate:garage": "playwright test --grep @garage",
+    "validate:reroll": "playwright test --grep @reroll",
+    "validate:copy-audio": "playwright test --grep @copy-audio",
+    "validate:smoke": "playwright test --grep @smoke"
   },
   "dependencies": {
     "playwright": "^1.58.2"

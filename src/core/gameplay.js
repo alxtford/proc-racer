@@ -1,6 +1,6 @@
 import { AI_PROFILE_DEFS, CAR_DEFS, PICKUP_DEFS } from "../data/content.js";
 import { getControlBinding } from "./controls.js";
-import { getSectorAtProgress, nearestPathInfo, samplePath } from "./generator.js";
+import { getSectorAtProgress, nearestPathInfo, samplePath, sampleTrackBank, sampleTrackHeight } from "./generator.js";
 import { clamp, distance, normalize, wrapAngle } from "./utils.js";
 
 const DEFAULT_PARTS = ["bumper", "door", "spoiler", "panel"];
@@ -118,6 +118,7 @@ export function createCar(carSource, isPlayer, slot, track, aiProfileId = "stabl
   const laneOffset = (slot % 2 === 0 ? -1 : 1) * Math.floor(slot / 2) * 24;
   const spawnX = start.x + Math.cos(dir + Math.PI / 2) * laneOffset;
   const spawnY = start.y + Math.sin(dir + Math.PI / 2) * laneOffset;
+  const startHeight = sampleTrackHeight(track, startOffset);
   return {
     id: `${isPlayer ? "player" : "ai"}-${slot}`,
     label,
@@ -193,6 +194,8 @@ export function createCar(carSource, isPlayer, slot, track, aiProfileId = "stabl
     stripCooldown: 0,
     rivalHeat: 0,
     pathT: startTBase,
+    groundZ: startHeight,
+    bank: sampleTrackBank(track, startOffset),
     previousX: spawnX,
     previousY: spawnY,
     speedTrail: [],
@@ -343,6 +346,8 @@ export function respawnCar(ctx, car, meta = {}) {
   car.powerPenalty = clamp(car.damage / car.def.durability, 0, 0.22);
   car.pathT = checkpoint.t;
   car.progress = getRelativeTrackProgress(ctx.state.track, checkpoint.t);
+  car.groundZ = sampleTrackHeight(ctx.state.track, checkpoint.t);
+  car.bank = sampleTrackBank(ctx.state.track, checkpoint.t);
   car.previousX = car.x;
   car.previousY = car.y;
   car.stuckTimer = 0;
@@ -575,11 +580,12 @@ export function integrateCar(ctx, car, dt) {
   const speedForward = car.vx * forward.x + car.vy * forward.y;
   const speedLateral = car.vx * lateral.x + car.vy * lateral.y;
   const braking = car.throttle < 0;
-  const turnScale = clamp(Math.abs(speedForward) / 150, 0.25, 1.16);
-  const driftBias = braking && Math.abs(car.steer) > 0.15 ? car.def.brakeTurn : 1;
-  car.driftLevel = clamp(car.driftLevel + ((braking ? 1 : -1) * dt * 2.6), 0, 1);
+  const turnScale = clamp(Math.abs(speedForward) / 126, 0.38, 1.24);
+  const driftBias = braking && Math.abs(car.steer) > 0.15 ? 1 + (car.def.brakeTurn - 1) * 0.58 : 1;
+  const driftDelta = braking && Math.abs(car.steer) > 0.18 ? 1.2 : -1.8;
+  car.driftLevel = clamp(car.driftLevel + driftDelta * dt, 0, 0.78);
   const turnPenalty = 1 - clamp(car.powerPenalty * 0.48, 0, 0.38);
-  car.angle += car.steer * car.def.turn * turnScale * turnPenalty * driftBias * dt;
+  car.angle += car.steer * car.def.turn * turnScale * turnPenalty * driftBias * dt * 1.08;
 
   const assistConfig = car.isPlayer ? getAssistConfig(ctx.state) : null;
   const slipstreamBonus = getSlipstreamBonus(ctx.state, car) * car.def.slipstreamAffinity;
@@ -594,11 +600,11 @@ export function integrateCar(ctx, car, dt) {
   car.vx += forward.x * car.throttle * accelForce * dt;
   car.vy += forward.y * car.throttle * accelForce * dt;
 
-  const gripStrength = clamp(car.def.grip * sector.gripMultiplier * dt * (1 - car.driftLevel * 0.48), 0, 0.3);
+  const gripStrength = clamp(car.def.grip * sector.gripMultiplier * dt * (1.06 - car.driftLevel * 0.28), 0, 0.38);
   car.vx -= lateral.x * speedLateral * gripStrength;
   car.vy -= lateral.y * speedLateral * gripStrength;
-  car.vx *= braking ? 0.986 : 0.992;
-  car.vy *= braking ? 0.986 : 0.992;
+  car.vx *= braking ? 0.982 : 0.994;
+  car.vy *= braking ? 0.982 : 0.994;
 
   const speed = Math.hypot(car.vx, car.vy);
   if (speed > maxSpeed) {
@@ -611,11 +617,14 @@ export function integrateCar(ctx, car, dt) {
   const previousY = car.y;
   car.x += car.vx * dt;
   car.y += car.vy * dt;
+  car.groundZ = sampleTrackHeight(ctx.state.track, pathInfo.t);
+  car.bank = sampleTrackBank(ctx.state.track, pathInfo.t);
   const trailLife = car.boostTimer > 0 ? 0.62 : car.slingshotTimer > 0 ? 0.46 : 0.34;
   const trailLimit = car.boostTimer > 0 ? 22 : car.slingshotTimer > 0 ? 18 : 14;
   car.speedTrail.push({
     x: car.x,
     y: car.y,
+    z: car.groundZ,
     angle: car.angle,
     age: trailLife,
     maxAge: trailLife,
@@ -682,8 +691,8 @@ function handleBoundaryCollision(ctx, car, dt) {
     car.x -= normal.x * penetration * 0.92;
     car.y -= normal.y * penetration * 0.92;
     const dot = car.vx * normal.x + car.vy * normal.y;
-    car.vx -= normal.x * dot * 1.6;
-    car.vy -= normal.y * dot * 1.6;
+    car.vx -= normal.x * dot * 1.9;
+    car.vy -= normal.y * dot * 1.9;
     if (!car.boundaryLatch) {
       car.wallHits += 1;
       car.boundaryLatch = true;
@@ -837,7 +846,7 @@ export function handleCarCollisions(ctx) {
         const separatingVelocity = relVx * normal.x + relVy * normal.y;
         const closingSpeed = Math.max(0, -separatingVelocity);
         if (closingSpeed > 0) {
-          const impulse = closingSpeed * 0.82;
+          const impulse = closingSpeed * 0.96;
           a.vx -= normal.x * impulse * 0.5;
           a.vy -= normal.y * impulse * 0.5;
           b.vx += normal.x * impulse * 0.5;

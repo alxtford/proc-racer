@@ -1,6 +1,5 @@
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { closeStaticServer, listenStaticServer } from "./static-server.mjs";
 
 const rootDir = process.cwd();
 
@@ -24,20 +23,36 @@ function runNodeScript(scriptPath, env = {}) {
   });
 }
 
-async function main() {
-  const { server, url } = await listenStaticServer({ rootDir, port: 0 });
+function runCommand(command, args, env = {}) {
+  return new Promise((resolve, reject) => {
+    const isWindows = process.platform === "win32";
+    const child = isWindows
+      ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", command, ...args], {
+          cwd: rootDir,
+          env: { ...process.env, ...env },
+          stdio: "inherit",
+        })
+      : spawn(command, args, {
+          cwd: rootDir,
+          env: { ...process.env, ...env },
+          stdio: "inherit",
+        });
 
-  try {
-    await runNodeScript(path.join("scripts", "validate-content.mjs"));
-    await runNodeScript(path.join("scripts", "check-garage-loop.mjs"), {
-      PROC_RACER_BASE_URL: url,
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
     });
-    await runNodeScript(path.join("scripts", "check-course-reroll.mjs"), {
-      PROC_RACER_BASE_URL: url,
-    });
-  } finally {
-    await closeStaticServer(server);
-  }
+
+    child.on("error", reject);
+  });
+}
+
+async function main() {
+  await runNodeScript(path.join("scripts", "validate-content.mjs"));
+  await runCommand("npx", ["playwright", "test"]);
 }
 
 main().catch((error) => {
