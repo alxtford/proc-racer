@@ -234,13 +234,22 @@ export function drawIsometricTrackPreview(canvas, event) {
   context.stroke();
 
   const gate = track.startLine;
-  const gatePoint = projectIsoPoint(gate.x, gate.y, gate.z || 0, { x: 0, y: 0, z: 0 }, { x: transform.offsetX, y: transform.offsetY }, transform.scale);
-  const gateWidth = gate.halfWidth * transform.scale * 0.88;
+  const gateZ = gate.z || 0;
+  const gateLeftIso = worldToIso(
+    gate.x + gate.normal.x * gate.halfWidth,
+    gate.y + gate.normal.y * gate.halfWidth,
+    gateZ,
+  );
+  const gateRightIso = worldToIso(
+    gate.x - gate.normal.x * gate.halfWidth,
+    gate.y - gate.normal.y * gate.halfWidth,
+    gateZ,
+  );
   context.strokeStyle = "rgba(255,255,255,0.9)";
   context.lineWidth = Math.max(3, transform.scale * 7);
   context.beginPath();
-  context.moveTo(gatePoint.x - gateWidth, gatePoint.y);
-  context.lineTo(gatePoint.x + gateWidth, gatePoint.y);
+  context.moveTo(gateLeftIso.x, gateLeftIso.y);
+  context.lineTo(gateRightIso.x, gateRightIso.y);
   context.stroke();
   context.restore();
 

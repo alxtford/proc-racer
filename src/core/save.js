@@ -100,6 +100,7 @@ export function migrateSave(rawSave) {
     migrated.daily.bestTime = rawSave.dailyBest;
   }
   migrated.strikeBoard = { ...migrated.strikeBoard, ...(rawSave.strikeBoard || {}) };
+  migrated.settings = { ...migrated.settings, ...(rawSave.settings || {}) };
   return ensureStyleLocker(ensureWallet(ensureGarage(migrated)));
 }
 

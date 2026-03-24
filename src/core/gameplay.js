@@ -214,7 +214,7 @@ export function usePickup(ctx, car) {
   } else if (pickupId === "pulse") {
     ctx.state.fx.push({ kind: "pulse", x: car.x, y: car.y, radius: 44, maxRadius: 200, life: 0.48, color: PICKUP_DEFS.pulse.color, owner: car.id });
     for (const target of ctx.state.cars) {
-      if (target.id === car.id || target.destroyed || target.invuln > 0) continue;
+      if (target.id === car.id || target.destroyed || target.finished || target.invuln > 0) continue;
       const gap = distance(car, target);
       if (gap < 190) {
         const strength = (1 - gap / 190) * 18;
@@ -451,7 +451,9 @@ function chooseAiLane(ctx, car, pathInfo) {
     intent = sector.tag === "hazard" ? "Pack in the killbox" : "Pack pressure";
   }
   const nearbyStrip = ctx.state.track.surgeStrips?.find((strip) => {
-    const delta = strip.t - pathInfo.t;
+    const delta = ctx.state.track.type === "circuit"
+      ? ((strip.t - pathInfo.t + 1) % 1)
+      : strip.t - pathInfo.t;
     return delta > 0 && delta < 0.045;
   });
   if (nearbyStrip && (!ahead || sector.tag === "high-speed")) {

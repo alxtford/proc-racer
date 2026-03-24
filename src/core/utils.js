@@ -39,8 +39,9 @@ export function pickOne(rng, list) {
 
 export function formatTime(seconds) {
   if (!Number.isFinite(seconds)) return "--";
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds - minutes * 60;
+  const rounded = Math.round(seconds * 100) / 100;
+  const minutes = Math.floor(rounded / 60);
+  const remainder = rounded - minutes * 60;
   return `${minutes}:${remainder.toFixed(2).padStart(5, "0")}`;
 }
 
