@@ -55,7 +55,7 @@ function runCommand(command, args, env = {}) {
 
 async function main() {
   await runNodeScript(path.join("scripts", "validate-content.mjs"));
-  await runCommand(process.execPath, ["--test", path.join("tests", "units", "core.test.mjs")]);
+  await runCommand(process.execPath, ["--test", "tests/units/*.test.mjs"]);
   await runCommand("npx", ["playwright", "test"]);
 }
 
