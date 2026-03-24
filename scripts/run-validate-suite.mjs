@@ -25,9 +25,9 @@ function runNodeScript(scriptPath, env = {}) {
 
 function runCommand(command, args, env = {}) {
   return new Promise((resolve, reject) => {
-    const isWindows = process.platform === "win32";
-    const child = isWindows
-      ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", command, ...args], {
+    const isWindowsNpx = process.platform === "win32" && command === "npx";
+    const child = isWindowsNpx
+      ? spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", "npx", ...args], {
           cwd: rootDir,
           env: { ...process.env, ...env },
           stdio: "inherit",
@@ -37,13 +37,16 @@ function runCommand(command, args, env = {}) {
           env: { ...process.env, ...env },
           stdio: "inherit",
         });
+    const displayCommand = isWindowsNpx
+      ? ["npx", ...args].join(" ")
+      : `${command} ${args.join(" ")}`;
 
     child.on("exit", (code) => {
       if (code === 0) {
         resolve();
         return;
       }
-      reject(new Error(`${command} ${args.join(" ")} exited with code ${code}`));
+      reject(new Error(`${displayCommand} exited with code ${code}`));
     });
 
     child.on("error", reject);

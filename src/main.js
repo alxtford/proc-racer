@@ -300,10 +300,12 @@ function createEvents() {
   ensureCustomCourseSeedState();
   const dailyEvent = createDailyEvent(new Date());
   if (state.save.daily.seed !== dailyEvent.seed) {
+    const preserveLegacyDailyBest = state.save.daily.seed === null
+      && Number.isFinite(state.save.daily.bestTime);
     clearDailyProgress(state.save);
     state.save.daily = {
       seed: dailyEvent.seed,
-      bestTime: null,
+      bestTime: preserveLegacyDailyBest ? state.save.daily.bestTime : null,
       rewardClaimed: false,
     };
     persistSave(state.save);

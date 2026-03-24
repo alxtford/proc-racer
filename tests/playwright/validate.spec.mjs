@@ -279,6 +279,7 @@ test("v4 save is migrated to current schema on load @migration", async ({ page }
   expect(reserialised).not.toBeNull();
   const reparsed = JSON.parse(reserialised);
   expect(reparsed.version).toBe(5);
+  expect(reparsed.daily.bestTime).toBeCloseTo(44.2, 5);
 
   expectNoPageErrors(errors);
 });
