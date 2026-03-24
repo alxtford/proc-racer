@@ -130,6 +130,76 @@ test("garage roll and style equip loop holds together @garage", async ({ page })
   expectNoPageErrors(errors);
 });
 
+test("oversized event progress auto-selects the last strike-board event instead of the daily", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page, { tutorialCompleted: true });
+
+  await page.evaluate(() => {
+    const raw = localStorage.getItem("proc-racer-save-v5");
+    const save = JSON.parse(raw);
+    save.eventProgress = 999;
+    localStorage.setItem("proc-racer-save-v5", JSON.stringify(save));
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(250);
+  await enterHub(page);
+
+  const selection = await page.evaluate(() => {
+    const events = window.__procRacer.events;
+    const selectedEventIndex = window.__procRacer.selectedEventIndex;
+    const selectedEvent = events[selectedEventIndex] || null;
+    const dailyIndex = events.findIndex((event) => event.daily);
+    const lastBoardIndex = dailyIndex - 1;
+    return {
+      selectedEventIndex,
+      selectedEventId: selectedEvent?.id || null,
+      selectedEventDaily: Boolean(selectedEvent?.daily),
+      lastBoardIndex,
+      lastBoardId: events[lastBoardIndex]?.id || null,
+    };
+  });
+
+  expect(selection.selectedEventIndex).toBe(selection.lastBoardIndex);
+  expect(selection.selectedEventId).toBe(selection.lastBoardId);
+  expect(selection.selectedEventDaily).toBe(false);
+
+  expectNoPageErrors(errors);
+});
+
+test("reloading during a garage roll restores the pre-roll save instead of burning Flux", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await enterHub(page);
+  await goToScreen(page, "foundry");
+
+  expect(await page.evaluate(() => window.__procRacer.save.wallet.flux)).toBe(220);
+
+  await page.click("#garage-roll-btn");
+  await expect(page.locator("#garage-roll-modal")).toBeVisible();
+  const spinningState = await page.evaluate(() => ({
+    flux: window.__procRacer.save.wallet.flux,
+    garageRollStatus: window.__procRacer.garageRoll?.status || null,
+  }));
+  expect(spinningState.flux).toBe(40);
+  expect(spinningState.garageRollStatus).toBe("spinning");
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(250);
+  await enterHub(page);
+  await goToScreen(page, "foundry");
+
+  const restoredState = await page.evaluate(() => ({
+    flux: window.__procRacer.save.wallet.flux,
+    scrap: window.__procRacer.save.wallet.scrap,
+    garageRoll: window.__procRacer.garageRoll,
+  }));
+  expect(restoredState.flux).toBe(220);
+  expect(restoredState.scrap).toBe(0);
+  expect(restoredState.garageRoll).toBeNull();
+
+  expectNoPageErrors(errors);
+});
+
 test("strike-board reroll mutates the board without touching the daily @reroll", async ({ page }) => {
   const errors = attachPageErrorCollector(page);
   await resetApp(page);
