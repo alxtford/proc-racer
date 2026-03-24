@@ -213,11 +213,11 @@ function applyMotifs(points, event, motifs) {
     const { tangent, normal } = getMotifFrame(shaped, event, centerIndex);
     const pattern = motif.type === "hairpin"
       ? [
-        { step: -2, normal: -0.08, tangent: -0.12 },
-        { step: -1, normal: 0.32, tangent: -0.16 },
-        { step: 0, normal: 0.72, tangent: 0 },
-        { step: 1, normal: 0.32, tangent: 0.16 },
-        { step: 2, normal: -0.08, tangent: 0.12 },
+        { step: -2, normal: -0.08, tangent: -0.12, x: -0.04, y: 0 },
+        { step: -1, normal: 0.32, tangent: -0.16, x: -0.05, y: 0.20 },
+        { step: 0, normal: 0.72, tangent: 0, x: 0, y: 0.44 },
+        { step: 1, normal: 0.32, tangent: 0.16, x: 0.05, y: 0.20 },
+        { step: 2, normal: -0.08, tangent: 0.12, x: 0.04, y: 0 },
       ]
       : motif.type === "chicane"
         ? [

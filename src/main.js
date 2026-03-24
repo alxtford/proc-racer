@@ -19,7 +19,7 @@ import { computeLeaderboard, createCar, finalizeFinish, handleCarCollisions, int
 import { getGhostKey, loadSave, persistSave, pushRunHistory } from "./core/save.js";
 import { buyCosmetic, equipCosmetic, getEquippedCosmeticDefs, getGarageCarStyle } from "./core/styleLocker.js";
 import { buildRunSummary, createUi } from "./core/ui.js";
-import { clamp, createKey, createRng, lerp, normalize, pickOne, TAU } from "./core/utils.js";
+import { clamp, createKey, createRng, lerp, normalize, pickOne, TAU, wrapAngle } from "./core/utils.js";
 import { BIOME_DEFS, CAR_DEFS, PICKUP_DEFS, EVENT_TEMPLATES, createDailyEvent } from "./data/content.js";
 
 const canvas = document.getElementById("game");
@@ -300,10 +300,12 @@ function createEvents() {
   ensureCustomCourseSeedState();
   const dailyEvent = createDailyEvent(new Date());
   if (state.save.daily.seed !== dailyEvent.seed) {
+    const preserveLegacyDailyBest = state.save.daily.seed === null
+      && Number.isFinite(state.save.daily.bestTime);
     clearDailyProgress(state.save);
     state.save.daily = {
       seed: dailyEvent.seed,
-      bestTime: null,
+      bestTime: preserveLegacyDailyBest ? state.save.daily.bestTime : null,
       rewardClaimed: false,
     };
     persistSave(state.save);
@@ -1108,7 +1110,7 @@ function getGhostSample() {
       return {
         x: lerp(previous.x, next.x, mix),
         y: lerp(previous.y, next.y, mix),
-        angle: lerp(previous.angle, next.angle, mix),
+        angle: previous.angle + wrapAngle(next.angle - previous.angle) * mix,
       };
     }
   }

@@ -10,6 +10,24 @@ import {
   resetApp,
 } from "./helpers/proc-racer.mjs";
 
+// A minimal v4 save that exercises every significant migration path:
+// - legacy `currency` field → wallet.flux
+// - legacy `dailyBest` field → daily.bestTime
+// - wins and bestTimes carried over
+const V4_SAVE = {
+  version: 4,
+  currency: 350,
+  scrap: 8,
+  premiumCurrency: 0,
+  wins: 2,
+  eventProgress: 4,
+  dailyBest: 44.2,
+  bestTimes: { "sprint-1": 51.6 },
+  eventResults: {},
+  runHistory: [],
+  settings: { assistLevel: "high" },
+};
+
 test("menu navigation and race overlays stay reachable @smoke", async ({ page }) => {
   const errors = attachPageErrorCollector(page);
   await resetApp(page);
@@ -223,6 +241,77 @@ test("copy clamp, tooltip timing, and audio transitions stay stable @copy-audio"
   expect(menuAudio.engineGain).toBeLessThan(0.01);
   expect(menuAudio.engineSubGain).toBeLessThan(0.01);
   expect(menuAudio.ambienceGain).toBeLessThan(0.01);
+
+  expectNoPageErrors(errors);
+});
+
+test("v4 save is migrated to current schema on load @migration", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+
+  // Clear all storage then install the v4 save before the game boots.
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(250);
+  await page.evaluate((save) => {
+    localStorage.clear();
+    localStorage.setItem("proc-racer-save-v4", JSON.stringify(save));
+  }, V4_SAVE);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(250);
+  await enterHub(page);
+
+  const save = await page.evaluate(() => structuredClone(window.__procRacer.save));
+
+  // Legacy `currency` field migrates to wallet.flux.
+  expect(save.wallet.flux).toBe(350);
+
+  // Legacy `scrap` field migrates to wallet.scrap.
+  expect(save.wallet.scrap).toBe(8);
+
+  // Legacy `dailyBest` migrates to daily.bestTime.
+  expect(save.daily.bestTime).toBeCloseTo(44.2, 5);
+
+  // Wins and bestTimes are preserved.
+  expect(save.wins).toBe(2);
+  expect(save.bestTimes["sprint-1"]).toBeCloseTo(51.6, 5);
+
+  // The save is re-keyed under the current version key (v5).
+  const reserialised = await page.evaluate(() => localStorage.getItem("proc-racer-save-v5"));
+  expect(reserialised).not.toBeNull();
+  const reparsed = JSON.parse(reserialised);
+  expect(reparsed.version).toBe(5);
+  expect(reparsed.daily.bestTime).toBeCloseTo(44.2, 5);
+
+  expectNoPageErrors(errors);
+});
+
+test("settings changes persist across a full page reload @persistence", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await enterHub(page);
+
+  // Confirm default state.
+  const before = await page.evaluate(() => window.__procRacer.save.settings.reducedShake);
+  expect(before).toBe(false);
+
+  // Mutate the setting in the live game object then force-write it to localStorage
+  // (mirrors what the settings UI does).
+  await page.evaluate(() => {
+    window.__procRacer.save.settings.reducedShake = true;
+    window.__procRacer.save.settings.assistLevel = "high";
+    localStorage.setItem("proc-racer-save-v5", JSON.stringify(window.__procRacer.save));
+  });
+
+  // Full reload — the game must re-read from localStorage.
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(250);
+  await enterHub(page);
+
+  const after = await page.evaluate(() => ({
+    reducedShake: window.__procRacer.save.settings.reducedShake,
+    assistLevel: window.__procRacer.save.settings.assistLevel,
+  }));
+  expect(after.reducedShake).toBe(true);
+  expect(after.assistLevel).toBe("high");
 
   expectNoPageErrors(errors);
 });
