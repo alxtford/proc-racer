@@ -24,6 +24,10 @@ import {
   renderTags,
 } from "../../src/core/ui/render-helpers.js";
 
+function countMatches(source, pattern) {
+  return [...source.matchAll(pattern)].length;
+}
+
 describe("controls.js", () => {
   it("returns default bindings when no custom key is present", () => {
     assert.strictEqual(getControlBinding({}, "accel"), "w");
@@ -111,24 +115,41 @@ describe("ui sections and routing", () => {
 
 describe("ui render helpers", () => {
   it("renders tags and info buttons", () => {
-    assert.strictEqual(renderTags(["A", "B"]), `<span class="mini-tag">A</span><span class="mini-tag">B</span>`);
-    assert.ok(renderInfoButton("info-1", "More info", "Tooltip body").includes(`data-tooltip="Tooltip body"`));
+    const tags = renderTags(["A", "B"]);
+    assert.strictEqual(countMatches(tags, /class="mini-tag"/g), 2);
+    assert.match(tags, />A<\/span>/);
+    assert.match(tags, />B<\/span>/);
+
+    const infoButton = renderInfoButton("info-1", "More info", "Tooltip body");
+    assert.match(infoButton, /<button[^>]+id="info-1"/);
+    assert.match(infoButton, /class="info-btn"/);
+    assert.match(infoButton, /aria-label="More info"/);
+    assert.match(infoButton, /aria-haspopup="dialog"/);
+    assert.match(infoButton, /aria-expanded="false"/);
+    assert.match(infoButton, /data-tooltip="Tooltip body"/);
   });
 
   it("renders summary grids and empty recent-run copy", () => {
     const summary = renderSummaryGrid([{ label: "Wins", value: "5", note: "Hot streak" }]);
-    assert.ok(summary.includes("Wins"));
-    assert.ok(summary.includes("Hot streak"));
+    assert.strictEqual(countMatches(summary, /class="profile-item profile-item-compact"/g), 1);
+    assert.match(summary, /<div class="section-label">Wins<\/div>/);
+    assert.match(summary, /<div class="profile-value">5<\/div>/);
+    assert.match(summary, /<div class="profile-note">Hot streak<\/div>/);
 
     const emptyRuns = renderRecentRuns([]);
-    assert.ok(emptyRuns.includes("First line"));
-    assert.ok(emptyRuns.includes("Daily push"));
+    assert.strictEqual(countMatches(emptyRuns, /class="results-item"/g), 3);
+    assert.strictEqual(countMatches(emptyRuns, /<strong>/g), 3);
+    assert.strictEqual(countMatches(emptyRuns, /class="results-inline"/g), 3);
   });
 
   it("renders populated recent runs and iso car figures", () => {
     const runs = renderRecentRuns([{ eventName: "Shatterline", place: 2, finishTime: "1:29.50", reward: 140, wrecks: 1 }]);
-    assert.ok(runs.includes("Shatterline"));
-    assert.ok(runs.includes("P2 // 1:29.50 // +140 Flux // 1 wrecks"));
+    assert.strictEqual(countMatches(runs, /class="results-item"/g), 1);
+    assert.match(runs, /<strong>Shatterline<\/strong>/);
+    assert.match(runs, /P2\b/);
+    assert.match(runs, /1:29\.50/);
+    assert.match(runs, /\+140 Flux/);
+    assert.match(runs, /1 wreck/);
 
     const emptyFigure = renderIsoCarFigure(null);
     assert.ok(emptyFigure.includes("No chassis online"));

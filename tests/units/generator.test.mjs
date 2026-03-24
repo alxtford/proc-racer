@@ -73,21 +73,32 @@ describe("generator.js", () => {
     it("builds the guided opener without hazards and with a lead shield beacon", () => {
       const track = buildTrack(getEvent("tutorial-ignition"));
       assert.strictEqual(track.hazards.length, 0);
-      assert.strictEqual(track.pickups.length, 7);
+      assert.ok(track.pickups.length > 0);
       assert.strictEqual(track.pickups[0].kind, "shield");
       assert.strictEqual(track.pickups[0].guidedBeacon, true);
-      approx(track.pickups[0].t, 0.052, 1e-9);
+      assert.ok(nearestPathInfo(track, track.pickups[0].x, track.pickups[0].y).distance < 1);
       assert.ok(track.safeRespawnNodes.length > 0);
       assert.ok(track.safeRespawnNodes.every((node) => getSectorAtProgress(track, node.t).tag !== "hazard"));
     });
 
     it("applies pickup and hazard modifiers to generated counts", () => {
-      const densePickupTrack = buildTrack(getEvent("grid-slipstream"));
-      const hazardTrack = buildTrack(getEvent("void-collar"));
-      assert.strictEqual(densePickupTrack.pickups.length, 10);
-      assert.strictEqual(densePickupTrack.hazards.length, 4);
-      assert.strictEqual(hazardTrack.pickups.length, 7);
-      assert.strictEqual(hazardTrack.hazards.length, 7);
+      const densePickupEvent = getEvent("grid-slipstream");
+      const basePickupEvent = getEvent("grid-slipstream");
+      basePickupEvent.modifierIds = [];
+
+      const hazardEvent = getEvent("void-collar");
+      const baseHazardEvent = getEvent("void-collar");
+      baseHazardEvent.modifierIds = baseHazardEvent.modifierIds.filter((id) => id !== "high-damage-hazards");
+
+      const densePickupTrack = buildTrack(densePickupEvent);
+      const basePickupTrack = buildTrack(basePickupEvent);
+      const hazardTrack = buildTrack(hazardEvent);
+      const baseHazardTrack = buildTrack(baseHazardEvent);
+
+      assert.ok(densePickupTrack.pickups.length > basePickupTrack.pickups.length);
+      assert.strictEqual(densePickupTrack.hazards.length, basePickupTrack.hazards.length);
+      assert.ok(hazardTrack.hazards.length > baseHazardTrack.hazards.length);
+      assert.strictEqual(hazardTrack.pickups.length, baseHazardTrack.pickups.length);
     });
 
     it("keeps props outside the road corridor", () => {

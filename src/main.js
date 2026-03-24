@@ -295,6 +295,16 @@ function enterGarage() {
   }, 90);
 }
 
+function getLastStrikeBoardEventIndex() {
+  const dailyIndex = state.events.findIndex((event) => event.daily);
+  const lastBoardIndex = dailyIndex > 1 ? dailyIndex - 1 : state.events.length - 1;
+  return Math.max(1, lastBoardIndex);
+}
+
+function getSavedHubEventIndex(eventProgress = state.save.eventProgress) {
+  return clamp(eventProgress || 1, 1, getLastStrikeBoardEventIndex());
+}
+
 function createEvents() {
   const strikeBoard = ensureStrikeBoardState();
   ensureCustomCourseSeedState();
@@ -312,7 +322,7 @@ function createEvents() {
   }
   state.events = [...buildStrikeBoardEvents(strikeBoard.seed), dailyEvent];
   if (!state.save.settings.tutorialCompleted) state.selectedEventIndex = 0;
-  else state.selectedEventIndex = clamp(state.save.eventProgress || 1, 1, state.events.length - 1);
+  else state.selectedEventIndex = getSavedHubEventIndex();
   syncSelectedGarageCar();
 }
 
@@ -331,7 +341,7 @@ function hydrateRunSummary(result) {
   }
   if (result.place === 1) {
     state.save.wins += 1;
-    state.save.eventProgress = Math.max(state.save.eventProgress, state.selectedEventIndex + 1);
+    state.save.eventProgress = getSavedHubEventIndex(Math.max(state.save.eventProgress, state.selectedEventIndex + 1));
   }
   if (result.event.guided && result.tutorialPickupMet) state.save.settings.tutorialCompleted = true;
   const bestKey = createKey(result.eventId, result.carId);
@@ -503,7 +513,7 @@ function rerollStrikeBoard() {
   if (previousEvent?.daily) state.selectedEventIndex = state.events.findIndex((event) => event.daily);
   else if (previousEvent?.guided) state.selectedEventIndex = 0;
   else if (!state.save.settings.tutorialCompleted) state.selectedEventIndex = 1;
-  else state.selectedEventIndex = clamp(previousIndex, 1, state.events.length - 2);
+  else state.selectedEventIndex = clamp(previousIndex, 1, getLastStrikeBoardEventIndex());
   persistSave(state.save);
   bus.emit("course_refresh", {
     price: purchase.price,
@@ -520,7 +530,7 @@ function retryRace() {
 
 function backToMenu() {
   if (state.currentEvent?.guided && state.save.settings.tutorialCompleted) {
-    state.selectedEventIndex = clamp(state.save.eventProgress || 1, 1, state.events.length - 1);
+    state.selectedEventIndex = getSavedHubEventIndex();
   }
   clearGarageRollTimers();
   state.garageRoll = null;
@@ -549,7 +559,6 @@ function startGarageRoll() {
     revealedSlots: [],
     assignments: {},
   };
-  persistSave(state.save);
   clearGarageRollTimers();
   bus.emit("garage_roll_start", { seed, price: purchase.price });
   const revealMoments = [920, 1380, 1820];

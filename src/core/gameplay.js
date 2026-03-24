@@ -1,6 +1,7 @@
 import { AI_PROFILE_DEFS, CAR_DEFS, PICKUP_DEFS } from "../data/content.js";
 import { getControlBinding } from "./controls.js";
 import { getSectorAtProgress, nearestPathInfo, samplePath, sampleTrackBank, sampleTrackHeight } from "./generator.js";
+import { getCarRaceUnits } from "./raceProgress.js";
 import { clamp, distance, normalize, wrapAngle } from "./utils.js";
 
 const DEFAULT_PARTS = ["bumper", "door", "spoiler", "panel"];
@@ -45,8 +46,7 @@ function getAssistConfig(state) {
 }
 
 function getRaceScore(state, car) {
-  const checkpointCount = state.track?.checkpoints?.length || 10;
-  return (car.currentLap - 1) * checkpointCount + car.checkpointIndex + (car.progress || 0);
+  return getCarRaceUnits(state, car);
 }
 
 function getRelativeTrackProgress(track, rawT) {

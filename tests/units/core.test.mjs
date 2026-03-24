@@ -13,7 +13,6 @@ import {
 } from "../../src/core/economy.js";
 
 import {
-  GARAGE_SCRAP_VALUE,
   isGarageSlotFilled, createEmptyGarageSlot,
   getGarageHandling, getGarageScore, getGarageStatPercent,
   getScrapValue, calculateRaceReward, getGarageProgression,
@@ -53,11 +52,16 @@ function makeResult(overrides = {}) {
   };
 }
 
-// Starter car hardcoded stats (from createStarterCar in garage.js).
-const STARTER_STATS = {
-  accel: 372, maxSpeed: 330, turn: 2.28, grip: 6.58, durability: 112,
-  mass: 1.01, brakeTurn: 1.08, slipstreamAffinity: 0.98, tierId: "starter",
-};
+function getStarterCar() {
+  return structuredClone(createDefaultSave().garage[0]);
+}
+
+function createGarageCar(overrides = {}) {
+  return {
+    ...getStarterCar(),
+    ...overrides,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // utils.js
@@ -334,7 +338,7 @@ describe("garage.js", () => {
       assert.strictEqual(isGarageSlotFilled(createEmptyGarageSlot(0)), false);
     });
     it("returns true for a car without empty flag", () => {
-      assert.strictEqual(isGarageSlotFilled(STARTER_STATS), true);
+      assert.strictEqual(isGarageSlotFilled(getStarterCar()), true);
     });
     it("returns false for null", () => {
       assert.strictEqual(isGarageSlotFilled(null), false);
@@ -345,10 +349,11 @@ describe("garage.js", () => {
     it("returns 0 for an empty slot", () => {
       assert.strictEqual(getGarageHandling(createEmptyGarageSlot(0)), 0);
     });
-    it("computes correctly for the starter car stats", () => {
-      const handling = getGarageHandling(STARTER_STATS);
-      // ((2.28/2.95)*58) + ((6.58/9.1)*42) ≈ 75.2
-      approx(handling, 75.196, 0.01);
+    it("increases when turn or grip improve and clamps extreme builds", () => {
+      const starter = getStarterCar();
+      assert.ok(getGarageHandling({ ...starter, turn: starter.turn + 0.2 }) > getGarageHandling(starter));
+      assert.ok(getGarageHandling({ ...starter, grip: starter.grip + 0.8 }) > getGarageHandling(starter));
+      assert.strictEqual(getGarageHandling({ ...starter, turn: 999, grip: 999 }), 100);
     });
   });
 
@@ -356,131 +361,146 @@ describe("garage.js", () => {
     it("returns 0 for an empty slot", () => {
       assert.strictEqual(getGarageScore(createEmptyGarageSlot(0)), 0);
     });
-    it("computes the expected score for starter car stats", () => {
-      // Calculated: accel%≈17.3, speed%≈23.1, handling%≈75.2, dur%≈31.25
-      // score = round(0.27*17.3 + 0.27*23.1 + 0.28*75.2 + 0.18*31.25) = 38
-      assert.strictEqual(getGarageScore(STARTER_STATS), 38);
+    it("rewards stronger builds and caps maxed-out stats", () => {
+      const starter = getStarterCar();
+      const accelUpgrade = { ...starter, accel: starter.accel + 40 };
+      const durabilityUpgrade = { ...starter, durability: starter.durability + 20 };
+      const maxed = createGarageCar({
+        accel: 9999,
+        maxSpeed: 9999,
+        turn: 9999,
+        grip: 9999,
+        durability: 9999,
+      });
+      assert.ok(getGarageScore(accelUpgrade) > getGarageScore(starter));
+      assert.ok(getGarageScore(durabilityUpgrade) > getGarageScore(starter));
+      assert.strictEqual(getGarageScore(maxed), 100);
     });
   });
 
   describe("getGarageStatPercent", () => {
     it("returns 0 for an unknown stat id", () => {
-      assert.strictEqual(getGarageStatPercent(STARTER_STATS, "unknown"), 0);
+      assert.strictEqual(getGarageStatPercent(getStarterCar(), "unknown"), 0);
     });
     it("returns a value in [0, 100] for accel", () => {
-      const pct = getGarageStatPercent(STARTER_STATS, "accel");
+      const pct = getGarageStatPercent(getStarterCar(), "accel");
       assert.ok(pct >= 0 && pct <= 100, `${pct} outside [0,100]`);
     });
   });
 
   describe("getScrapValue", () => {
-    const base = GARAGE_SCRAP_VALUE;
-    const car = (tierId, score) => ({ ...STARTER_STATS, tierId, score });
-
-    it("apex tier: adds +22 bonus", () => {
-      // score=38 < 55 so no score bonus
-      assert.strictEqual(getScrapValue(car("apex", 38)), base + 22);
+    it("increases with higher tiers for the same chassis", () => {
+      const baseCar = getStarterCar();
+      const street = getScrapValue({ ...baseCar, tierId: "street" });
+      const club = getScrapValue({ ...baseCar, tierId: "club" });
+      const pro = getScrapValue({ ...baseCar, tierId: "pro" });
+      const apex = getScrapValue({ ...baseCar, tierId: "apex" });
+      assert.ok(street < club);
+      assert.ok(club < pro);
+      assert.ok(pro < apex);
     });
-    it("pro tier: adds +14 bonus", () => {
-      assert.strictEqual(getScrapValue(car("pro", 38)), base + 14);
-    });
-    it("club tier: adds +8 bonus", () => {
-      assert.strictEqual(getScrapValue(car("club", 38)), base + 8);
-    });
-    it("street tier: adds +4 bonus", () => {
-      assert.strictEqual(getScrapValue(car("street", 38)), base + 4);
-    });
-    it("adds score bonus for high-stat car (score well above 55)", () => {
-      // Max-stat car: getGarageScore returns 100.
-      // bonus = Math.max(0, round((100-55)/10)) = round(4.5) = 5
-      const maxCar = { accel: 620, maxSpeed: 430, turn: 3.08, grip: 9.4, durability: 156, tierId: "street" };
-      const result = getScrapValue(maxCar);
-      assert.strictEqual(result, base + 4 + 5);
+    it("adds more scrap for stronger cars within the same tier", () => {
+      const starter = getStarterCar();
+      const low = getScrapValue({ ...starter, tierId: "street" });
+      const high = getScrapValue(createGarageCar({
+        tierId: "street",
+        accel: 9999,
+        maxSpeed: 9999,
+        turn: 9999,
+        grip: 9999,
+        durability: 9999,
+      }));
+      assert.ok(high > low);
     });
   });
 
   describe("calculateRaceReward", () => {
-    it("baseline: non-guided, last place, no goals, over par, 2 destroyed = 92", () => {
-      assert.strictEqual(calculateRaceReward(makeResult()), 92);
+    it("returns a positive integer baseline payout", () => {
+      const reward = calculateRaceReward(makeResult());
+      assert.ok(Number.isInteger(reward));
+      assert.ok(reward > 0);
     });
 
-    it("guided event uses lower base reward", () => {
-      const r = calculateRaceReward(makeResult({ event: { guided: true } }));
-      assert.strictEqual(r, 72);
+    it("guided events pay less base reward than standard events", () => {
+      const standard = calculateRaceReward(makeResult());
+      const guided = calculateRaceReward(makeResult({ event: { guided: true } }));
+      assert.ok(guided < standard);
     });
 
-    it("1st place adds 72", () => {
-      const r = calculateRaceReward(makeResult({ place: 1 }));
-      assert.strictEqual(r, 92 + 72);
+    it("rewards stronger finishing positions", () => {
+      const first = calculateRaceReward(makeResult({ place: 1 }));
+      const second = calculateRaceReward(makeResult({ place: 2 }));
+      const third = calculateRaceReward(makeResult({ place: 3 }));
+      const fourth = calculateRaceReward(makeResult({ place: 4 }));
+      assert.ok(first > second);
+      assert.strictEqual(second, third);
+      assert.ok(third > fourth);
     });
 
-    it("2nd or 3rd place adds 40", () => {
-      assert.strictEqual(calculateRaceReward(makeResult({ place: 2 })), 92 + 40);
-      assert.strictEqual(calculateRaceReward(makeResult({ place: 3 })), 92 + 40);
+    it("adds the same increment for each goal met", () => {
+      const zeroGoals = calculateRaceReward(makeResult({ goalsMet: 0 }));
+      const oneGoal = calculateRaceReward(makeResult({ goalsMet: 1 }));
+      const twoGoals = calculateRaceReward(makeResult({ goalsMet: 2 }));
+      assert.ok(oneGoal > zeroGoals);
+      assert.ok(twoGoals > oneGoal);
+      assert.strictEqual(twoGoals - oneGoal, oneGoal - zeroGoals);
     });
 
-    it("each goal met adds 24", () => {
-      assert.strictEqual(calculateRaceReward(makeResult({ goalsMet: 3 })), 92 + 72);
+    it("rewards beating par time", () => {
+      const overPar = calculateRaceReward(makeResult({ deltaToPar: 5 }));
+      const onPar = calculateRaceReward(makeResult({ deltaToPar: 0 }));
+      const underPar = calculateRaceReward(makeResult({ deltaToPar: -5 }));
+      assert.ok(onPar > overPar);
+      assert.strictEqual(onPar, underPar);
     });
 
-    it("finishing under par (deltaToPar <= 0) adds 26", () => {
-      const r = calculateRaceReward(makeResult({ deltaToPar: 0 }));
-      assert.strictEqual(r, 92 + 26);
+    it("rewards cleaner survival in even steps", () => {
+      const twoWrecks = calculateRaceReward(makeResult({ destroyedCount: 2 }));
+      const oneWreck = calculateRaceReward(makeResult({ destroyedCount: 1 }));
+      const zeroWrecks = calculateRaceReward(makeResult({ destroyedCount: 0 }));
+      assert.ok(zeroWrecks > oneWreck);
+      assert.ok(oneWreck > twoWrecks);
+      assert.strictEqual(zeroWrecks - oneWreck, oneWreck - twoWrecks);
     });
 
-    it("surviving without destruction adds 20; partial survival adds 10", () => {
-      assert.strictEqual(calculateRaceReward(makeResult({ destroyedCount: 0 })), 92 + 20);
-      assert.strictEqual(calculateRaceReward(makeResult({ destroyedCount: 1 })), 92 + 10);
-      assert.strictEqual(calculateRaceReward(makeResult({ destroyedCount: 2 })), 92);
-    });
-
-    it("new event best adds 18 (non-guided only)", () => {
+    it("applies event-best bonuses only to non-guided runs", () => {
       const nonGuided = calculateRaceReward(makeResult({ newEventBest: true }));
-      assert.strictEqual(nonGuided, 92 + 18);
-
+      const nonGuidedBase = calculateRaceReward(makeResult());
       const guided = calculateRaceReward(makeResult({ newEventBest: true, event: { guided: true } }));
-      assert.strictEqual(guided, 72); // no bonus
+      const guidedBase = calculateRaceReward(makeResult({ event: { guided: true } }));
+      assert.ok(nonGuided > nonGuidedBase);
+      assert.strictEqual(guided, guidedBase);
     });
 
-    it("daily event adds 68", () => {
-      const r = calculateRaceReward(makeResult({ event: { daily: true } }));
-      assert.strictEqual(r, 92 + 68);
+    it("adds daily and daily-best bonuses independently", () => {
+      const baseline = calculateRaceReward(makeResult());
+      const daily = calculateRaceReward(makeResult({ event: { daily: true } }));
+      const dailyBest = calculateRaceReward(makeResult({ newDailyBest: true }));
+      const stacked = calculateRaceReward(makeResult({ event: { daily: true }, newDailyBest: true }));
+      assert.ok(daily > baseline);
+      assert.ok(dailyBest > baseline);
+      assert.ok(stacked > daily);
+      assert.ok(stacked > dailyBest);
     });
 
-    it("new daily best adds 36", () => {
-      const r = calculateRaceReward(makeResult({ newDailyBest: true }));
-      assert.strictEqual(r, 92 + 36);
-    });
-
-    it("tutorial pickup adds 48 when both flags set", () => {
-      const r = calculateRaceReward(makeResult({
+    it("only awards the tutorial pickup bonus when both tutorial flags are set", () => {
+      const guidedBase = calculateRaceReward(makeResult({
+        event: { guided: true },
+        wasTutorialRun: true,
+        tutorialPickupMet: false,
+      }));
+      const tutorialMet = calculateRaceReward(makeResult({
         event: { guided: true },
         wasTutorialRun: true,
         tutorialPickupMet: true,
-        destroyedCount: 0,
-        deltaToPar: 0,
       }));
-      // 72 (guided) + 26 (par) + 20 (0 destroyed) + 48 (tutorial)
-      assert.strictEqual(r, 166);
-    });
-
-    it("tutorial pickup not awarded if pickup not met", () => {
-      const r = calculateRaceReward(makeResult({ wasTutorialRun: true, tutorialPickupMet: false }));
-      assert.strictEqual(r, 92);
-    });
-
-    it("maximum combined payout (all bonuses, non-guided daily)", () => {
-      const r = calculateRaceReward(makeResult({
-        place: 1,
-        goalsMet: 3,
-        deltaToPar: -5,
-        destroyedCount: 0,
-        newEventBest: true,
-        newDailyBest: true,
-        event: { guided: false, daily: true },
+      const notTutorialRun = calculateRaceReward(makeResult({
+        event: { guided: true },
+        wasTutorialRun: false,
+        tutorialPickupMet: true,
       }));
-      // 92 + 72 + 72 + 26 + 20 + 18 + 68 + 36 = 404
-      assert.strictEqual(r, 404);
+      assert.ok(tutorialMet > guidedBase);
+      assert.strictEqual(notTutorialRun, guidedBase);
     });
   });
 

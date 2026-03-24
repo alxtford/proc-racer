@@ -13,6 +13,7 @@ import {
 } from "../garage.js";
 import { CONTROL_DEFAULTS, CONTROL_LABELS } from "../controls.js";
 import { COURSE_REROLL_COST, getCurrencyBalance } from "../economy.js";
+import { getCarRaceUnits, getTrackRaceUnits } from "../raceProgress.js";
 import { ensureStyleLocker, getEquippedCosmeticDefs, isCosmeticOwned } from "../styleLocker.js";
 import { createKey, formatTime } from "../utils.js";
 import { BIOME_DEFS, MODIFIER_DEFS, PICKUP_DEFS } from "../../data/content.js";
@@ -265,22 +266,6 @@ function getDisplayEvent(state, event) {
     customSeedValue: customSeed,
     customSeedMatchesBoard: false,
   };
-}
-
-function getTrackRaceUnits(state) {
-  const checkpointCount = Math.max(1, state.track?.checkpoints?.length || 1);
-  return state.track?.type === "circuit"
-    ? Math.max(1, (state.currentEvent?.laps || 1) * checkpointCount)
-    : Math.max(1, checkpointCount - 1);
-}
-
-function getCarRaceUnits(state, car) {
-  const checkpointCount = Math.max(1, state.track?.checkpoints?.length || 1);
-  const progress = Number.isFinite(car.progress) ? car.progress : 0;
-  if (state.track?.type === "circuit") {
-    return Math.max(0, (Math.max(1, car.currentLap) - 1) * checkpointCount + car.checkpointIndex + progress);
-  }
-  return Math.max(0, car.checkpointIndex + progress);
 }
 
 function getClassifiedFinishTime(state, car, totalUnits, secondsPerUnit) {
