@@ -13,6 +13,7 @@ import {
 } from "../garage.js";
 import { CONTROL_DEFAULTS, CONTROL_LABELS } from "../controls.js";
 import { COURSE_REROLL_COST, getCurrencyBalance } from "../economy.js";
+import { buildTrack } from "../generator.js";
 import { getCarRaceUnits, getTrackRaceUnits } from "../raceProgress.js";
 import { ensureStyleLocker, getEquippedCosmeticDefs, isCosmeticOwned } from "../styleLocker.js";
 import { createKey, formatTime } from "../utils.js";
@@ -221,6 +222,10 @@ function formatCourseSeed(seed) {
   return Number.isFinite(seed) ? `Seed ${Math.round(seed)}` : "Seed --";
 }
 
+function getEventParLabel(event) {
+  return `~${formatTime(event?.parTime)}`;
+}
+
 function getEventTemplateId(event) {
   return event?.templateId || event?.id || null;
 }
@@ -257,7 +262,7 @@ function getDisplayEvent(state, event) {
       customSeedMatchesBoard: true,
     };
   }
-  return {
+  const displayEvent = {
     ...event,
     templateId,
     id: `${templateId}@seed:${customSeed}`,
@@ -265,6 +270,13 @@ function getDisplayEvent(state, event) {
     customSeed: true,
     customSeedValue: customSeed,
     customSeedMatchesBoard: false,
+  };
+  if (displayEvent.timingSeed === displayEvent.seed && Number.isFinite(displayEvent.parTime)) return displayEvent;
+  const track = buildTrack(displayEvent);
+  return {
+    ...displayEvent,
+    parTime: track.parTime,
+    timingSeed: displayEvent.seed,
   };
 }
 
@@ -1738,7 +1750,7 @@ export function createUi(state, callbacks = {}) {
     refs.heroReplayCopy.textContent = getReplayHook(state, event);
     refs.heroDailyCopy.textContent = getHeroDailyCopy(state);
 
-    const eventMetaText = `${event.guided ? "~1:12" : `~${formatTime(event.parTime)}`} // ${getDifficultyLabel(event)} // ${formatCourseSeed(event.seed)} // Goal: ${getPrimaryGoal(event).toLowerCase()}`;
+    const eventMetaText = `${getEventParLabel(event)} // ${getDifficultyLabel(event)} // ${formatCourseSeed(event.seed)} // Goal: ${getPrimaryGoal(event).toLowerCase()}`;
     refs.eventFocusBadge.textContent = getEventBadge(state, event);
     refs.eventFocusTitle.textContent = event.name;
     refs.eventFocusMeta.textContent = eventMetaText;
@@ -1829,7 +1841,7 @@ export function createUi(state, callbacks = {}) {
           <div class="card-title">${displayItem.name}</div>
           <div class="card-kicker">${getEventBadge(state, displayItem)}</div>
         </div>
-        <div class="event-meta">${displayItem.guided ? "~1:12" : `~${formatTime(displayItem.parTime)}`} // ${getDifficultyLabel(displayItem)}</div>
+        <div class="event-meta">${getEventParLabel(displayItem)} // ${getDifficultyLabel(displayItem)}</div>
         <div class="event-meta">${clampTagCopy(getPrimaryGoal(displayItem))}</div>
         <div class="card-footer">
           <div class="mini-tags">

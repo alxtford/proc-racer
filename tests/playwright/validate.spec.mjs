@@ -65,6 +65,462 @@ test("menu navigation and race overlays stay reachable @smoke", async ({ page })
   expectNoPageErrors(errors);
 });
 
+test("button states stay distinct and compact launch actions stay legible @smoke", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await page.setViewportSize({ width: 800, height: 600 });
+  await enterHub(page);
+
+  const launchMetrics = await page.evaluate(() => Array.from(document.querySelectorAll(".workspace-launch-actions > button")).map((button) => {
+    const rect = button.getBoundingClientRect();
+    return {
+      label: button.textContent?.trim() || "",
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+      clientHeight: button.clientHeight,
+      scrollHeight: button.scrollHeight,
+    };
+  }));
+  expect(launchMetrics.length).toBeGreaterThan(0);
+  expect(launchMetrics.every((button) => button.width >= 120), JSON.stringify(launchMetrics, null, 2)).toBeTruthy();
+  expect(launchMetrics.every((button) => button.height <= 68), JSON.stringify(launchMetrics, null, 2)).toBeTruthy();
+
+  const launchRowState = await page.evaluate(() => {
+    const row = document.querySelector(".workspace-launch-actions");
+    const rect = row?.getBoundingClientRect();
+    return {
+      rowHeight: rect ? Math.round(rect.height) : 0,
+      viewportHeight: document.documentElement.clientHeight,
+      pageHeight: document.documentElement.scrollHeight,
+    };
+  });
+  expect(launchRowState.rowHeight).toBeLessThanOrEqual(124);
+  expect(launchRowState.pageHeight).toBe(launchRowState.viewportHeight);
+
+  const raceSelected = await page.locator("#menu-tab-home").evaluate((button) => {
+    const cs = getComputedStyle(button);
+    return {
+      borderColor: cs.borderColor,
+      background: cs.backgroundImage || cs.backgroundColor,
+    };
+  });
+  await page.hover("#menu-tab-profile");
+  const garageHover = await page.locator("#menu-tab-profile").evaluate((button) => {
+    const cs = getComputedStyle(button);
+    return {
+      borderColor: cs.borderColor,
+      background: cs.backgroundImage || cs.backgroundColor,
+    };
+  });
+  expect(
+    garageHover.borderColor !== raceSelected.borderColor || garageHover.background !== raceSelected.background,
+    JSON.stringify({ raceSelected, garageHover }, null, 2),
+  ).toBeTruthy();
+
+  await page.keyboard.press("Tab");
+  const focusState = await page.locator("#menu-tab-home").evaluate((button) => {
+    const cs = getComputedStyle(button);
+    return {
+      outline: cs.outline,
+      boxShadow: cs.boxShadow,
+    };
+  });
+  expect(focusState.boxShadow === "none" && focusState.outline === "none", JSON.stringify(focusState, null, 2)).toBeFalsy();
+
+  await goToSection(page, "tools");
+  await page.waitForTimeout(80);
+  const disabledState = await page.locator("#event-custom-seed-clear").evaluate((button) => {
+    const cs = getComputedStyle(button);
+    return {
+      opacity: Number(cs.opacity),
+      cursor: cs.cursor,
+      pointerEvents: cs.pointerEvents,
+    };
+  });
+  expect(disabledState.opacity).toBeLessThan(0.8);
+  expect(disabledState.pointerEvents).toBe("none");
+  expect(disabledState.cursor).toBe("default");
+
+  await goToSection(page, "launch");
+  await page.waitForTimeout(80);
+  const launchButton = page.locator("#launch-btn");
+  const launchBox = await launchButton.boundingBox();
+  if (!launchBox) throw new Error("Launch button is not visible.");
+  await page.mouse.move(launchBox.x + launchBox.width / 2, launchBox.y + launchBox.height / 2);
+  await page.mouse.down();
+  const pressedTransform = await launchButton.evaluate((button) => getComputedStyle(button).transform);
+  await page.mouse.up();
+  expect(pressedTransform).not.toBe("none");
+
+  expectNoPageErrors(errors);
+});
+
+test("topbar bands stay stable and selected nav follows the active screen @smoke", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await enterHub(page);
+
+  const wideSamples = [];
+  for (const screen of ["race", "garage", "style", "settings"]) {
+    await goToScreen(page, screen);
+    await page.waitForTimeout(80);
+    wideSamples.push(await page.evaluate((activeScreen) => {
+      const nav = document.querySelector(".workspace-nav")?.getBoundingClientRect();
+      const meta = document.querySelector(".workspace-topbar-meta")?.getBoundingClientRect();
+      const chipStrip = document.querySelector(".workspace-chip-strip");
+      const subtabTops = Array.from(document.querySelectorAll(".workspace-subnav .workspace-subtab"))
+        .map((button) => Math.round(button.getBoundingClientRect().top));
+      return {
+        activeScreen,
+        navWidth: Math.round(nav?.width || 0),
+        metaWidth: Math.round(meta?.width || 0),
+        chipOverflow: chipStrip ? chipStrip.scrollWidth > chipStrip.clientWidth + 1 : false,
+        selectedTabs: Array.from(document.querySelectorAll(".workspace-nav .menu-tab.selected")).map((button) => button.id),
+        subnavWrap: subtabTops.length > 1 ? Math.max(...subtabTops) - Math.min(...subtabTops) > 1 : false,
+      };
+    }, screen));
+  }
+
+  const navWidths = wideSamples.map((sample) => sample.navWidth);
+  const metaWidths = wideSamples.map((sample) => sample.metaWidth);
+  expect(Math.max(...navWidths) - Math.min(...navWidths), JSON.stringify(wideSamples, null, 2)).toBeLessThanOrEqual(4);
+  expect(Math.max(...metaWidths) - Math.min(...metaWidths), JSON.stringify(wideSamples, null, 2)).toBeLessThanOrEqual(4);
+  expect(wideSamples.every((sample) => !sample.chipOverflow), JSON.stringify(wideSamples, null, 2)).toBeTruthy();
+  expect(wideSamples.every((sample) => !sample.subnavWrap), JSON.stringify(wideSamples, null, 2)).toBeTruthy();
+  expect(wideSamples.find((sample) => sample.activeScreen === "race")?.selectedTabs).toEqual(["menu-tab-home"]);
+  expect(wideSamples.find((sample) => sample.activeScreen === "garage")?.selectedTabs).toEqual(["menu-tab-profile"]);
+  expect(wideSamples.find((sample) => sample.activeScreen === "style")?.selectedTabs).toEqual(["menu-tab-profile"]);
+  expect(wideSamples.find((sample) => sample.activeScreen === "settings")?.selectedTabs).toEqual(["menu-tab-settings"]);
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await goToScreen(page, "style");
+  await page.waitForTimeout(120);
+  const compactStyleChrome = await page.evaluate(() => {
+    const chipStrip = document.querySelector(".workspace-chip-strip");
+    const subtabTops = Array.from(document.querySelectorAll(".workspace-subnav .workspace-subtab"))
+      .map((button) => Math.round(button.getBoundingClientRect().top));
+    return {
+      chipOverflow: chipStrip ? chipStrip.scrollWidth > chipStrip.clientWidth + 1 : false,
+      subnavWrap: subtabTops.length > 1 ? Math.max(...subtabTops) - Math.min(...subtabTops) > 1 : false,
+      selectedTabs: Array.from(document.querySelectorAll(".workspace-nav .menu-tab.selected")).map((button) => button.id),
+    };
+  });
+  expect(compactStyleChrome.chipOverflow, JSON.stringify(compactStyleChrome, null, 2)).toBeFalsy();
+  expect(compactStyleChrome.subnavWrap, JSON.stringify(compactStyleChrome, null, 2)).toBeFalsy();
+  expect(compactStyleChrome.selectedTabs).toEqual(["menu-tab-profile"]);
+
+  await page.setViewportSize({ width: 812, height: 375 });
+  await goToScreen(page, "settings");
+  await page.waitForTimeout(120);
+  const compactSettingsChrome = await page.evaluate(() => {
+    const chipStrip = document.querySelector(".workspace-chip-strip");
+    const subtabTops = Array.from(document.querySelectorAll(".workspace-subnav .workspace-subtab"))
+      .map((button) => Math.round(button.getBoundingClientRect().top));
+    return {
+      chipOverflow: chipStrip ? chipStrip.scrollWidth > chipStrip.clientWidth + 1 : false,
+      subnavWrap: subtabTops.length > 1 ? Math.max(...subtabTops) - Math.min(...subtabTops) > 1 : false,
+      selectedTabs: Array.from(document.querySelectorAll(".workspace-nav .menu-tab.selected")).map((button) => button.id),
+    };
+  });
+  expect(compactSettingsChrome.chipOverflow, JSON.stringify(compactSettingsChrome, null, 2)).toBeFalsy();
+  expect(compactSettingsChrome.subnavWrap, JSON.stringify(compactSettingsChrome, null, 2)).toBeFalsy();
+  expect(compactSettingsChrome.selectedTabs).toEqual(["menu-tab-settings"]);
+
+  expectNoPageErrors(errors);
+});
+
+test("splash fills widescreen layouts and keeps the CTA reachable @smoke", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const splash1440 = await page.evaluate(() => {
+    const shell = document.querySelector("#menu-splash")?.getBoundingClientRect();
+    const frame = document.querySelector(".splash-frame")?.getBoundingClientRect();
+    const rail = document.querySelector(".splash-feature-rail")?.getBoundingClientRect();
+    const copy = document.querySelector(".splash-copy");
+    return {
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      shellWidth: Math.round(shell?.width || 0),
+      shellHeight: Math.round(shell?.height || 0),
+      frameWidth: Math.round(frame?.width || 0),
+      railWidth: Math.round(rail?.width || 0),
+      copyVisible: Boolean(copy && getComputedStyle(copy).display !== "none"),
+    };
+  });
+  expect(splash1440.shellWidth / splash1440.viewportWidth).toBeGreaterThan(0.95);
+  expect(splash1440.shellHeight / splash1440.viewportHeight).toBeGreaterThan(0.95);
+  expect(splash1440.railWidth / splash1440.frameWidth).toBeGreaterThan(0.24);
+  expect(splash1440.copyVisible).toBeTruthy();
+
+  const startButtonReachability = await page.locator("#start-btn").evaluate((button) => {
+    const rect = button.getBoundingClientRect();
+    const sampleX = rect.left + rect.width / 2;
+    const sampleY = rect.top + rect.height / 2;
+    const topElement = document.elementFromPoint(sampleX, sampleY);
+    return {
+      sampleX: Math.round(sampleX),
+      sampleY: Math.round(sampleY),
+      topElementId: topElement?.id || "",
+      reachable: topElement === button || button.contains(topElement),
+    };
+  });
+  expect(startButtonReachability.reachable, JSON.stringify(startButtonReachability, null, 2)).toBeTruthy();
+
+  await enterHub(page);
+  const state = await readGameState(page);
+  expect(state.menuStage).toBe("hub");
+
+  expectNoPageErrors(errors);
+});
+
+test("workspace shell stays compact on landscape mobile and fills wide settings panels @smoke", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await page.setViewportSize({ width: 844, height: 390 });
+  await enterHub(page);
+
+  const shortLandscapeRace = await page.evaluate(() => {
+    const viewportHeight = document.documentElement.clientHeight;
+    const topbar = document.querySelector(".workspace-topbar")?.getBoundingClientRect();
+    const screen = document.querySelector(".workspace-screen")?.getBoundingClientRect();
+    const blocks = Array.from(document.querySelectorAll(".selection-block")).map((element) => {
+      const rect = element.getBoundingClientRect();
+      return { bottom: rect.bottom, height: rect.height };
+    });
+    return {
+      viewportHeight,
+      pageHeight: document.documentElement.scrollHeight,
+      topbarHeight: topbar?.height || 0,
+      screenBottom: screen?.bottom || 0,
+      blocks,
+    };
+  });
+  expect(shortLandscapeRace.pageHeight).toBe(shortLandscapeRace.viewportHeight);
+  expect(shortLandscapeRace.topbarHeight / shortLandscapeRace.viewportHeight).toBeLessThan(0.16);
+  expect(shortLandscapeRace.screenBottom).toBeLessThanOrEqual(shortLandscapeRace.viewportHeight);
+  expect(
+    shortLandscapeRace.blocks.every((block) => block.bottom <= shortLandscapeRace.viewportHeight + 1),
+    JSON.stringify(shortLandscapeRace, null, 2),
+  ).toBeTruthy();
+
+  for (const screen of ["garage", "foundry", "style", "career", "settings"]) {
+    await goToScreen(page, screen);
+    const layout = await page.evaluate(() => {
+      const viewportHeight = document.documentElement.clientHeight;
+      const blocks = Array.from(document.querySelectorAll(".selection-block")).map((element) => {
+        const rect = element.getBoundingClientRect();
+        return { bottom: rect.bottom, height: rect.height };
+      });
+      return {
+        viewportHeight,
+        pageHeight: document.documentElement.scrollHeight,
+        blocks,
+      };
+    });
+    expect(layout.pageHeight).toBe(layout.viewportHeight);
+    expect(
+      layout.blocks.every((block) => block.bottom <= layout.viewportHeight + 1),
+      JSON.stringify({ screen, layout }, null, 2),
+    ).toBeTruthy();
+  }
+
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await goToScreen(page, "settings");
+  await page.waitForTimeout(120);
+  const wideSettings = await page.evaluate(() => {
+    const viewportHeight = document.documentElement.clientHeight;
+    const screen = document.querySelector(".workspace-screen")?.getBoundingClientRect();
+    const block = document.querySelector(".workspace-screen-settings > .selection-block")?.getBoundingClientRect();
+    return {
+      viewportHeight,
+      pageHeight: document.documentElement.scrollHeight,
+      screenHeight: screen?.height || 0,
+      blockHeight: block?.height || 0,
+    };
+  });
+  expect(wideSettings.pageHeight).toBe(wideSettings.viewportHeight);
+  expect(wideSettings.blockHeight / wideSettings.screenHeight).toBeGreaterThan(0.8);
+
+  expectNoPageErrors(errors);
+});
+
+test("race board keeps previews visible and hero surfaces fit their content @smoke", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await enterHub(page);
+  await goToScreen(page, "race");
+
+  const launchMetrics = await page.evaluate(() => {
+    const hero = document.querySelector(".workspace-hero-block");
+    const poster = document.querySelector(".workspace-race-poster");
+    const side = document.querySelector(".workspace-race-side");
+    const focus = document.querySelector(".workspace-race-poster > .workspace-race-focus");
+    const heroRect = hero?.getBoundingClientRect();
+    const posterRect = poster?.getBoundingClientRect();
+    const sideRect = side?.getBoundingClientRect();
+    const focusRect = focus?.getBoundingClientRect();
+    return {
+      viewportHeight: document.documentElement.clientHeight,
+      pageHeight: document.documentElement.scrollHeight,
+      heroBottom: Math.round(heroRect?.bottom || 0),
+      posterBottom: Math.round(posterRect?.bottom || 0),
+      sideBottom: Math.round(sideRect?.bottom || 0),
+      focusBottom: Math.round(focusRect?.bottom || 0),
+    };
+  });
+  expect(launchMetrics.pageHeight).toBe(launchMetrics.viewportHeight);
+  expect(launchMetrics.posterBottom, JSON.stringify(launchMetrics, null, 2)).toBeLessThanOrEqual(launchMetrics.heroBottom + 1);
+  expect(launchMetrics.sideBottom, JSON.stringify(launchMetrics, null, 2)).toBeLessThanOrEqual(launchMetrics.heroBottom + 1);
+  expect(launchMetrics.focusBottom, JSON.stringify(launchMetrics, null, 2)).toBeLessThanOrEqual(launchMetrics.posterBottom + 1);
+
+  await goToSection(page, "board");
+  await page.waitForTimeout(120);
+  const boardMetrics = await page.evaluate(() => {
+    const summary = document.querySelector(".workspace-race-summary-block");
+    const browser = document.querySelector(".workspace-browser-block");
+    const list = document.querySelector(".workspace-event-list");
+    const focus = document.querySelector(".workspace-race-summary-block > .workspace-race-focus");
+    const summaryRect = summary?.getBoundingClientRect();
+    const browserRect = browser?.getBoundingClientRect();
+    const listRect = list?.getBoundingClientRect();
+    const focusRect = focus?.getBoundingClientRect();
+    return {
+      viewportHeight: document.documentElement.clientHeight,
+      pageHeight: document.documentElement.scrollHeight,
+      previewPresent: Boolean(document.querySelector(".workspace-race-summary-block #event-preview")),
+      summaryBottom: Math.round(summaryRect?.bottom || 0),
+      focusBottom: Math.round(focusRect?.bottom || 0),
+      browserBottom: Math.round(browserRect?.bottom || 0),
+      listBottom: Math.round(listRect?.bottom || 0),
+    };
+  });
+  expect(boardMetrics.previewPresent, JSON.stringify(boardMetrics, null, 2)).toBeTruthy();
+  expect(boardMetrics.pageHeight).toBe(boardMetrics.viewportHeight);
+  expect(boardMetrics.focusBottom, JSON.stringify(boardMetrics, null, 2)).toBeLessThanOrEqual(boardMetrics.summaryBottom + 1);
+  expect(boardMetrics.listBottom, JSON.stringify(boardMetrics, null, 2)).toBeLessThanOrEqual(boardMetrics.browserBottom + 1);
+
+  expectNoPageErrors(errors);
+});
+
+test("compact garage and style screens keep key controls inside the viewport @smoke", async ({ page }) => {
+  const errors = attachPageErrorCollector(page);
+  await resetApp(page);
+  await page.setViewportSize({ width: 800, height: 600 });
+  await enterHub(page);
+
+  await goToScreen(page, "garage");
+  const garage800 = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    pageHeight: document.documentElement.scrollHeight,
+    statsBottom: Math.round(document.querySelector(".garage-focus-stats")?.getBoundingClientRect().bottom || 0),
+  }));
+  expect(garage800.pageHeight).toBe(garage800.viewportHeight);
+  expect(garage800.statsBottom).toBeLessThanOrEqual(garage800.viewportHeight + 1);
+
+  await goToScreen(page, "style");
+  const style800 = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    pageHeight: document.documentElement.scrollHeight,
+    loadoutBottom: Math.round(document.querySelector(".style-live-card")?.getBoundingClientRect().bottom || 0),
+    cardBottom: Math.round(document.querySelector(".workspace-style-grid .style-card")?.getBoundingClientRect().bottom || 0),
+  }));
+  expect(style800.pageHeight).toBe(style800.viewportHeight);
+  expect(style800.loadoutBottom).toBeLessThanOrEqual(style800.viewportHeight + 1);
+  expect(style800.cardBottom).toBeLessThanOrEqual(style800.viewportHeight + 1);
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await goToScreen(page, "race");
+  await page.waitForTimeout(120);
+  const race844Launch = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    launchBottom: Math.round(document.querySelector(".workspace-launch-actions")?.getBoundingClientRect().bottom || 0),
+    heroButtons: document.querySelectorAll(".workspace-launch-actions > button").length,
+  }));
+  expect(race844Launch.launchBottom).toBeLessThanOrEqual(race844Launch.viewportHeight + 1);
+  expect(race844Launch.heroButtons).toBe(1);
+
+  await goToSection(page, "tools");
+  await page.waitForTimeout(120);
+  const race844Tools = await page.evaluate(() => {
+    const clearButton = document.getElementById("event-custom-seed-clear");
+    const clearStyle = clearButton ? window.getComputedStyle(clearButton) : null;
+    const utilityButtons = document.querySelectorAll(".workspace-utility-actions > button").length;
+    return {
+      viewportHeight: window.innerHeight,
+      lockBottom: Math.round(document.getElementById("event-custom-seed-apply")?.getBoundingClientRect().bottom || 0),
+      clearVisible: Boolean(clearButton && clearStyle && clearStyle.display !== "none" && clearStyle.visibility !== "hidden"),
+      clearBottom: Math.round(clearButton?.getBoundingClientRect().bottom || 0),
+      utilityButtons,
+    };
+  });
+  expect(race844Tools.lockBottom).toBeLessThanOrEqual(race844Tools.viewportHeight + 1);
+  expect(race844Tools.utilityButtons).toBe(2);
+  expect(
+    !race844Tools.clearVisible || race844Tools.clearBottom <= race844Tools.viewportHeight + 1,
+    JSON.stringify(race844Tools, null, 2),
+  ).toBeTruthy();
+
+  await goToScreen(page, "garage");
+  await page.waitForTimeout(120);
+  const garage844 = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    statsBottom: Math.round(document.querySelector(".garage-focus-stats")?.getBoundingClientRect().bottom || 0),
+  }));
+  expect(garage844.statsBottom).toBeLessThanOrEqual(garage844.viewportHeight + 1);
+
+  await goToScreen(page, "style");
+  await page.waitForTimeout(120);
+  const style844 = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    cardBottom: Math.round(document.querySelector(".workspace-style-grid .style-card")?.getBoundingClientRect().bottom || 0),
+    compactGrid: document.querySelector(".workspace-style-grid-compact") !== null,
+  }));
+  expect(style844.cardBottom).toBeLessThanOrEqual(style844.viewportHeight + 1);
+  expect(style844.compactGrid).toBeTruthy();
+
+  await page.setViewportSize({ width: 812, height: 375 });
+  await goToScreen(page, "style");
+  await page.waitForTimeout(120);
+  const style812 = await page.evaluate(() => ({
+    viewportHeight: window.innerHeight,
+    cardBottom: Math.round(document.querySelector(".workspace-style-grid .style-card")?.getBoundingClientRect().bottom || 0),
+    compactGrid: document.querySelector(".workspace-style-grid-compact") !== null,
+  }));
+  expect(style812.cardBottom).toBeLessThanOrEqual(style812.viewportHeight + 1);
+  expect(style812.compactGrid).toBeTruthy();
+
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await goToScreen(page, "settings");
+  await page.waitForTimeout(120);
+  const settings1920 = await page.evaluate(() => {
+    const block = document.querySelector(".workspace-screen-settings > .selection-block")?.getBoundingClientRect();
+    const muteRow = document.getElementById("settings-mute")?.closest(".settings-row-toggle")?.getBoundingClientRect();
+    const assist = document.getElementById("settings-assist")?.getBoundingClientRect();
+    const shakeToggle = document.getElementById("settings-shake")?.getBoundingClientRect();
+    const summary = document.querySelector(".settings-summary-strip")?.getBoundingClientRect();
+    return {
+      viewportHeight: window.innerHeight,
+      blockBottom: Math.round(block?.bottom || 0),
+      muteBottom: Math.round(muteRow?.bottom || 0),
+      assistTop: Math.round(assist?.top || 0),
+       summaryTop: Math.round(summary?.top || 0),
+       summaryBottom: Math.round(summary?.bottom || 0),
+      toggleWidth: Math.round(shakeToggle?.width || 0),
+    };
+  });
+  expect(settings1920.toggleWidth).toBeGreaterThanOrEqual(40);
+  expect(settings1920.summaryTop).toBeGreaterThan(settings1920.viewportHeight * 0.78);
+  expect(settings1920.summaryBottom).toBeLessThanOrEqual(settings1920.viewportHeight + 1);
+  expect(settings1920.muteBottom).toBeGreaterThan(settings1920.summaryTop - 80);
+  expect(settings1920.assistTop).toBeGreaterThan(settings1920.viewportHeight * 0.75);
+
+  expectNoPageErrors(errors);
+});
+
 test("garage roll and style equip loop holds together @garage", async ({ page }) => {
   const errors = attachPageErrorCollector(page);
   await resetApp(page);
@@ -102,7 +558,6 @@ test("garage roll and style equip loop holds together @garage", async ({ page })
   });
 
   await goToScreen(page, "style");
-  await goToSection(page, "shop");
 
   let buyButton = page.locator('.style-card[data-style-action="buy"]').first();
   const nextPageButton = page.locator('[data-style-page-nav="1"]').first();
@@ -122,7 +577,6 @@ test("garage roll and style equip loop holds together @garage", async ({ page })
   await expect(equipButton).toBeVisible();
   await equipButton.click();
 
-  await goToSection(page, "loadout");
   await expect(page.locator("#equipped-style")).toContainText("Current loadout");
   const finalState = await readGameState(page);
   expect(finalState.wallet.scrap).toBeLessThan(500);

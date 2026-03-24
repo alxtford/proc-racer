@@ -34,9 +34,51 @@ const RACE_TIME_LIMITS = {
   max: 105,
 };
 
-const TRACK_UNITS_PER_SECOND = {
-  circuit: 168,
-  sprint: 33,
+const GARAGE_TOP_SPEED_RANGE = {
+  min: 300,
+  max: 430,
+};
+
+const REFERENCE_PAR_TOP_SPEED_PERCENT = 0.6;
+const REFERENCE_PAR_SPEED = lerp(
+  GARAGE_TOP_SPEED_RANGE.min,
+  GARAGE_TOP_SPEED_RANGE.max,
+  REFERENCE_PAR_TOP_SPEED_PERCENT,
+);
+
+const MINIMUM_COURSE_LENGTH = {
+  circuit: 6400,
+  sprint: 12000,
+};
+
+const MAX_LENGTH_SCALE = {
+  circuit: 1.8,
+  sprint: 4.8,
+};
+
+const TRACK_WIDTH_BASE = {
+  circuit: 194,
+  sprint: 186,
+};
+
+const TRACK_WIDTH_VARIATION = {
+  circuit: 18,
+  sprint: 16,
+};
+
+const TRACK_WIDTH_SCALE = 1.5;
+
+const SURGE_STRIP_CONFIG = {
+  "high-speed": {
+    widthFactor: 0.48,
+    length: 96,
+    laneOffsetFactor: 0.26,
+  },
+  recovery: {
+    widthFactor: 0.36,
+    length: 70,
+    laneOffsetFactor: 0.18,
+  },
 };
 
 export function samplePath(points, t, closed = true) {
@@ -306,15 +348,21 @@ function measurePathLength(points, closed) {
   return total;
 }
 
-function getTargetRaceTime(event) {
-  const fallback = event.type === "circuit" ? 84 : 90;
-  return clamp(Number.isFinite(event.parTime) ? event.parTime : fallback, RACE_TIME_LIMITS.min, RACE_TIME_LIMITS.max);
+function getLapCount(event) {
+  return event.type === "circuit" ? Math.max(1, event.laps || 1) : 1;
 }
 
 function estimateRaceTime(pathLength, event) {
-  const laps = event.type === "circuit" ? Math.max(1, event.laps || 1) : 1;
-  const unitsPerSecond = TRACK_UNITS_PER_SECOND[event.type] || TRACK_UNITS_PER_SECOND.sprint;
-  return (pathLength * laps) / unitsPerSecond;
+  return (pathLength * getLapCount(event)) / REFERENCE_PAR_SPEED;
+}
+
+function getMinimumCourseLength(event) {
+  const minimumTimeLength = (RACE_TIME_LIMITS.min * REFERENCE_PAR_SPEED) / getLapCount(event);
+  return Math.max(MINIMUM_COURSE_LENGTH[event.type] || MINIMUM_COURSE_LENGTH.sprint, minimumTimeLength);
+}
+
+function roundParTime(seconds) {
+  return Math.round(seconds * 100) / 100;
 }
 
 function scalePointCloud(points, factor) {
@@ -432,7 +480,7 @@ function analyzeTrackGeometry(points, event) {
   };
 }
 
-function scoreGeometry(metrics, event, targetRaceTime) {
+function scoreGeometry(metrics, event) {
   const maxTarget = event.type === "circuit" ? 1.22 : 1.08;
   const sharpTarget = event.type === "circuit" ? 7 : 4;
   const rawSwitchMax = event.type === "circuit" ? 7 : 5;
@@ -450,9 +498,8 @@ function scoreGeometry(metrics, event, targetRaceTime) {
     Math.max(0, chicaneTarget - metrics.chicaneCandidates) * 3 +
     Math.max(0, hairpinTarget - metrics.hairpinCandidates) * 2 +
     metrics.avgCornerAngle * 10 +
-    Math.abs((metrics.estimatedRaceTime ?? targetRaceTime) - targetRaceTime) * 2.4 +
-    Math.max(0, RACE_TIME_LIMITS.min - (metrics.estimatedRaceTime ?? targetRaceTime)) * 10 +
-    Math.max(0, (metrics.estimatedRaceTime ?? targetRaceTime) - RACE_TIME_LIMITS.max) * 10
+    Math.max(0, RACE_TIME_LIMITS.min - (metrics.estimatedRaceTime ?? 0)) * 12 +
+    Math.max(0, (metrics.estimatedRaceTime ?? 0) - RACE_TIME_LIMITS.max) * 12
   );
 }
 
@@ -478,26 +525,30 @@ function isTimingPlayable(metrics) {
 
 function buildPlayablePath(event, rng) {
   let best = null;
-  const targetRaceTime = getTargetRaceTime(event);
+  const minimumCourseLength = getMinimumCourseLength(event);
   for (let attempt = 0; attempt < 28; attempt += 1) {
     let controlPoints = createControlPoints(event, rng, attempt);
     let points = smoothPoints(controlPoints, event);
     let pathLength = measurePathLength(points, event.type === "circuit");
-    let estimatedRaceTime = estimateRaceTime(pathLength, event);
-    const durationScale = clamp(targetRaceTime / Math.max(1, estimatedRaceTime), 0.84, 1.42);
-    if (Math.abs(durationScale - 1) > 0.03) {
-      controlPoints = scalePointCloud(controlPoints, durationScale);
-      points = scalePointCloud(points, durationScale);
+    const lengthScale = clamp(
+      minimumCourseLength / Math.max(1, pathLength),
+      1,
+      MAX_LENGTH_SCALE[event.type] || MAX_LENGTH_SCALE.sprint,
+    );
+    if (lengthScale > 1.03) {
+      controlPoints = scalePointCloud(controlPoints, lengthScale);
+      points = scalePointCloud(points, lengthScale);
       pathLength = measurePathLength(points, event.type === "circuit");
-      estimatedRaceTime = estimateRaceTime(pathLength, event);
     }
+    let estimatedRaceTime = estimateRaceTime(pathLength, event);
     const metrics = analyzeTrackGeometry(points, event);
     metrics.pathLength = pathLength;
     metrics.estimatedRaceTime = estimatedRaceTime;
+    metrics.parTime = roundParTime(estimatedRaceTime);
     metrics.estimatedLapTime = event.type === "circuit"
       ? estimatedRaceTime / Math.max(1, event.laps || 1)
       : estimatedRaceTime;
-    const score = scoreGeometry(metrics, event, targetRaceTime);
+    const score = scoreGeometry(metrics, event);
     if (!best || score < best.score) {
       best = { controlPoints, points, metrics, score };
     }
@@ -795,7 +846,8 @@ function buildSurgeStrips(points, event, sectors, width, rng) {
     const next = samplePath(points, t + 0.003, circuit);
     const tangent = normalize(next.x - point.x, next.y - point.y);
     const normal = { x: -tangent.y, y: tangent.x };
-    const laneOffset = (rng() - 0.5) * width * (sector.tag === "high-speed" ? 0.34 : 0.2);
+    const stripConfig = SURGE_STRIP_CONFIG[sector.tag] || SURGE_STRIP_CONFIG.recovery;
+    const laneOffset = (rng() - 0.5) * width * stripConfig.laneOffsetFactor;
     strips.push({
       id: `surge-${sector.id}-${i}`,
       x: point.x + normal.x * laneOffset,
@@ -805,8 +857,8 @@ function buildSurgeStrips(points, event, sectors, width, rng) {
       tangent,
       normal,
       laneOffset,
-      length: sector.tag === "high-speed" ? 88 : 62,
-      width: sector.tag === "high-speed" ? width * 0.34 : width * 0.24,
+      length: stripConfig.length,
+      width: width * stripConfig.widthFactor,
       sectorTag: sector.tag,
       color: sector.tag === "high-speed" ? "#5cf9ff" : "#5df3b0",
     });
@@ -1003,7 +1055,9 @@ export function buildTrack(event) {
   const biome = BIOME_DEFS[event.biomeId];
   const generatedPath = buildPlayablePath(event, rng);
   const { controlPoints, points, metrics } = generatedPath;
-  const width = event.type === "circuit" ? 180 + rng() * 24 : 170 + rng() * 20;
+  const parTime = roundParTime(metrics.parTime ?? estimateRaceTime(metrics.pathLength || measurePathLength(points, event.type === "circuit"), event));
+  const trafficWidthBoost = Math.min(24, event.aiCount * 3.2) + (event.modifierIds.includes("dense-traffic") ? 10 : 0);
+  const width = (TRACK_WIDTH_BASE[event.type] + trafficWidthBoost + rng() * TRACK_WIDTH_VARIATION[event.type]) * TRACK_WIDTH_SCALE;
   const anchors = chooseTrackAnchors(points, event, width);
   const sectors = buildSectors(points, event, rng, biome);
   const elevation = buildElevationProfile(points, event, sectors, biome, width, rng);
@@ -1132,7 +1186,11 @@ export function buildTrack(event) {
       ...checkpoint,
       z: sampleElevationSamples(elevation.samples, checkpoint.t, event.type === "circuit").height,
     })),
-    metrics,
+    metrics: {
+      ...metrics,
+      parTime,
+    },
+    parTime,
     startT: anchors.startT,
     finishT: anchors.finishT,
     startLine: {

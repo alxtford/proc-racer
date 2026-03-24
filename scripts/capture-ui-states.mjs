@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright";
-import { clickFirst, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
+import { goToMenuScreen, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
 
 const outputDir = path.resolve(process.cwd(), "output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -24,22 +24,19 @@ const states = [
   {
     name: "post-polish-profile",
     action: async (page) => {
-      await clickFirst(page, ["#menu-tab-profile", "#menu-tab-garage"]);
-      await waitForMenuScreen(page, "garage");
+      await goToMenuScreen(page, "garage");
     },
   },
   {
     name: "post-polish-foundry",
     action: async (page) => {
-      await clickFirst(page, ["#menu-tab-foundry", "#profile-tab-foundry"]);
-      await waitForMenuScreen(page, "foundry");
+      await goToMenuScreen(page, "foundry");
     },
   },
   {
     name: "post-polish-garage-roll",
     action: async (page) => {
-      await clickFirst(page, ["#menu-tab-foundry", "#profile-tab-foundry"]);
-      await waitForMenuScreen(page, "foundry");
+      await goToMenuScreen(page, "foundry");
       await page.click("#garage-roll-btn");
       await page.waitForSelector("#garage-roll-modal:not(.hidden)");
       await page.waitForTimeout(2400);
@@ -56,15 +53,13 @@ const states = [
         await page.click("#garage-roll-confirm-btn");
         await page.waitForSelector("#garage-roll-modal", { state: "hidden" });
       }
-      await clickFirst(page, ["#menu-tab-style", "#profile-tab-style"]);
-      await waitForMenuScreen(page, "style");
+      await goToMenuScreen(page, "style");
     },
   },
   {
     name: "post-polish-career",
     action: async (page) => {
-      await clickFirst(page, ["#menu-tab-career", "#profile-tab-career"]);
-      await waitForMenuScreen(page, "career");
+      await goToMenuScreen(page, "career");
     },
   },
   {

@@ -1,4 +1,9 @@
 export function renderShell(refs, shellModel, route) {
+  const tabRefs = {
+    "menu-tab-home": refs.menuTabHome,
+    "menu-tab-profile": refs.menuTabProfile,
+    "menu-tab-settings": refs.menuTabSettings,
+  };
   refs.menuEyebrow.textContent = shellModel.eyebrow;
   refs.hubTitle.textContent = shellModel.title;
   refs.menuIntro.textContent = shellModel.intro;
@@ -9,15 +14,20 @@ export function renderShell(refs, shellModel, route) {
     .map((chip, index) => `<span class="hero-chip${index === 0 ? " hero-chip-hero" : ""}">${chip}</span>`)
     .join("");
   refs.hubSubnav.innerHTML = (shellModel.subnav || [])
-    .map((item) => `<button class="workspace-subtab${item.active ? " selected" : ""}" data-route-section="${item.id}" type="button">${item.label}</button>`)
+    .map((item) => {
+      const routeAttr = item.screen
+        ? `data-route-screen="${item.screen}"`
+        : `data-route-section="${item.id}"`;
+      return `<button class="workspace-subtab${item.active ? " selected" : ""}" ${routeAttr} type="button">${item.label}</button>`;
+    })
     .join("");
   refs.hubSubnav.classList.toggle("hidden", !shellModel.subnav?.length);
   refs.hubSubnav.dataset.screen = route.screen;
   shellModel.tabs.forEach((tab) => {
-    const button = refs[tab.id];
+    const button = tabRefs[tab.id];
     if (!button) return;
     button.textContent = tab.label;
-    button.classList.toggle("selected", route.screen === tab.screen);
+    button.classList.toggle("selected", Boolean(tab.active));
     button.dataset.screen = tab.screen;
   });
 }

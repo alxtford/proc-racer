@@ -4,6 +4,7 @@ output/
 # Local working notes
 progress.md
 .codex/
+.vercel/
 
 # Logs
 *.log

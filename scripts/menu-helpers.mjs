@@ -31,3 +31,23 @@ export async function clickFirst(page, selectors) {
   }
   throw new Error(`No matching selector found: ${selectors.join(", ")}`);
 }
+
+const SCREEN_SELECTORS = {
+  race: ["#menu-tab-home"],
+  garage: ["#menu-tab-profile", '[data-route-screen="garage"]'],
+  settings: ["#menu-tab-settings"],
+};
+
+export async function goToMenuScreen(page, screen) {
+  if (screen === "foundry" || screen === "style" || screen === "career") {
+    await clickFirst(page, SCREEN_SELECTORS.garage);
+    await waitForMenuScreen(page, "garage");
+    await clickFirst(page, [`[data-route-screen="${screen}"]`]);
+    await waitForMenuScreen(page, screen);
+    return;
+  }
+  const selectors = SCREEN_SELECTORS[screen];
+  if (!selectors) throw new Error(`Unsupported menu screen: ${screen}`);
+  await clickFirst(page, selectors);
+  await waitForMenuScreen(page, screen);
+}

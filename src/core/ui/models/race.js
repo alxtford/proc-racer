@@ -24,13 +24,24 @@ import {
   getStoredMedal,
   supportsCustomCourseSeed,
 } from "../legacy.js";
+import { getHubPaneSize, isCompactHubPane } from "../layout.js";
 import { formatTime } from "../../utils.js";
 
 function clampPage(page, pageCount) {
   return Math.max(0, Math.min(pageCount - 1, Number.isInteger(page) ? page : 0));
 }
 
+function getEventParLabel(event) {
+  return `~${formatTime(event?.parTime)}`;
+}
+
 export function buildRaceModel(state, route) {
+  const { width: paneWidth, height: paneHeight } = getHubPaneSize();
+  const compactLandscape = isCompactHubPane(paneWidth, paneHeight);
+  const launchFocusOnly = compactLandscape
+    || paneHeight <= 480
+    || (paneWidth <= 980 && paneHeight <= 520)
+    || paneWidth <= 820;
   const baseEvent = state.events[state.selectedEventIndex] || null;
   const event = baseEvent ? getDisplayEvent(state, baseEvent) : null;
   const eventResult = event ? getEventResult(state, event) : null;
@@ -52,7 +63,7 @@ export function buildRaceModel(state, route) {
         kind: item.daily ? "daily" : item.guided ? "guided" : "event",
         name: displayItem.name,
         badge: getEventBadge(state, displayItem),
-        meta: `${displayItem.guided ? "~1:12" : `~${formatTime(displayItem.parTime)}`} // ${formatCourseSeed(displayItem.seed)}`,
+        meta: `${getEventParLabel(displayItem)} // ${formatCourseSeed(displayItem.seed)}`,
         goal: getPrimaryGoal(displayItem),
         cardTags: [
           getStoredMedal(cardResult)
@@ -76,6 +87,10 @@ export function buildRaceModel(state, route) {
     currentPage,
     pageCount,
     visibleEvents,
+    compactLandscape,
+    heroShowsSecondaryActions: !launchFocusOnly,
+    showLaunchUtility: !launchFocusOnly,
+    toolsShowLaunchOverflow: launchFocusOnly || compactLandscape,
     startLabel: event ? getStartLabel(state, event) : "Hit The Grid",
     dailyLabel: getQuickLabel(state).includes("Daily") ? getQuickLabel(state) : "Run Daily Gauntlet",
     quickLabel: getQuickLabel(state),
@@ -99,7 +114,7 @@ export function buildRaceModel(state, route) {
     hero: event ? {
       title: event.name,
       badge: getEventBadge(state, event),
-      meta: `${event.guided ? "~1:12" : `~${formatTime(event.parTime)}`} // ${formatCourseSeed(event.seed)} // Goal: ${getPrimaryGoal(event).toLowerCase()}`,
+      meta: `${getEventParLabel(event)} // ${formatCourseSeed(event.seed)} // Goal: ${getPrimaryGoal(event).toLowerCase()}`,
       copy: getEventReason(state, event, eventResult),
       tags: getFocusTags(state, event, eventResult),
       ghostStatus: getGhostReady(state, event) ? "Ghost ready" : "Ghost cold",

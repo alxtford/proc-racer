@@ -45,6 +45,7 @@ This command is self-contained. It starts a temporary static server, runs seeded
 
 - [docs/product-intent.md](docs/product-intent.md): product thesis and UX guardrails
 - [docs/frontend-audit-2026-03-21.md](docs/frontend-audit-2026-03-21.md): frontend review and follow-up findings
+- [docs/vercel-deployment.md](docs/vercel-deployment.md): repo-specific guide for shipping SHARDLINE on Vercel
 - [CONTRIBUTING.md](CONTRIBUTING.md): contributor workflow and validation expectations
 
 ## Repository Notes

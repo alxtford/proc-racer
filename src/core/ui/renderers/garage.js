@@ -6,7 +6,7 @@ function renderGarageHero(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Selected Car</div>
-          ${renderInfoButton("car-info-btn", "Car help", "The selected chassis anchors your next launch, with slot browsing and pressure split into their own views.")}
+          ${renderInfoButton("car-info-btn", "Car help", "The selected chassis anchors your next launch, with slot pressure, Foundry access, and the broader player hub all hanging off this lineup view.")}
         </div>
         <div id="car-focus-badge" class="section-note">${model.hero?.badge || "No car selected"}</div>
       </div>
@@ -34,7 +34,7 @@ function renderGarageSlots(model) {
           <div class="section-label">Garage Slots</div>
           <div id="garage-slots-note" class="section-note">${model.liveCars} live // ${model.openSlots} open</div>
         </div>
-        <button class="secondary-btn section-action-btn" data-route-screen="foundry" type="button">Jump To Foundry</button>
+        <button class="secondary-btn section-action-btn" data-route-screen="foundry" type="button">Open Foundry</button>
       </div>
       <div id="car-list" class="car-list garage-slot-list">
         ${model.cars.map((car) => `
@@ -66,24 +66,11 @@ function renderGarageSnapshot(model) {
   `;
 }
 
-export function renderGarageScreen(model, section) {
-  if (section === "slots") {
-    return `
-      <div class="workspace-screen workspace-screen-garage workspace-screen-sectioned">
-        ${renderGarageSlots(model)}
-      </div>
-    `;
-  }
-  if (section === "snapshot") {
-    return `
-      <div class="workspace-screen workspace-screen-garage workspace-screen-sectioned">
-        ${renderGarageSnapshot(model)}
-      </div>
-    `;
-  }
+export function renderGarageScreen(model) {
   return `
-    <div class="workspace-screen workspace-screen-garage workspace-screen-sectioned">
+    <div class="workspace-screen workspace-screen-garage">
       ${renderGarageHero(model)}
+      ${renderGarageSlots(model)}
       ${renderGarageSnapshot(model)}
     </div>
   `;

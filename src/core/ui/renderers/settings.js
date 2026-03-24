@@ -1,7 +1,7 @@
 import { formatKeyLabel } from "../legacy.js";
 import { renderInfoButton } from "../render-helpers.js";
 
-function renderSettingsComfort() {
+function renderSettingsComfort(model) {
   return `
     <section class="selection-block settings-block workspace-settings-comfort">
       <div class="section-head">
@@ -46,6 +46,15 @@ function renderSettingsComfort() {
             </label>
           </div>
         </div>
+      </div>
+      <div class="settings-summary-strip">
+        ${model.comfortSummary.map((item) => `
+          <div class="settings-summary-card">
+            <div class="section-label">${item.label}</div>
+            <div class="profile-value">${item.value}</div>
+            <div class="profile-note">${item.note}</div>
+          </div>
+        `).join("")}
       </div>
     </section>
   `;
@@ -93,7 +102,7 @@ function renderSettingsControls(model) {
 export function renderSettingsScreen(model, section) {
   return `
     <div class="workspace-screen workspace-screen-settings workspace-screen-sectioned">
-      ${section === "controls" ? renderSettingsControls(model) : renderSettingsComfort()}
+      ${section === "controls" ? renderSettingsControls(model) : renderSettingsComfort(model)}
     </div>
   `;
 }

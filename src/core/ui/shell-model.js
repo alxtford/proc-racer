@@ -8,6 +8,8 @@ import {
 } from "./legacy.js";
 import { getRouteSection, getSectionOptions } from "./sections.js";
 
+const PLAYER_HUB_SCREENS = ["garage", "foundry", "style", "career"];
+
 export function deriveShellModel(state, route) {
   const selectedEvent = state.events[state.selectedEventIndex] || null;
   const raceEvent = selectedEvent ? getDisplayEvent(state, selectedEvent) : null;
@@ -15,6 +17,7 @@ export function deriveShellModel(state, route) {
   const liveCars = getFilledGarageCars(state.save).length;
   const flux = getCurrencyBalance(state.save, "flux");
   const scrap = getCurrencyBalance(state.save, "scrap");
+  const inPlayerHub = PLAYER_HUB_SCREENS.includes(route.screen);
   const screenCopy = {
     race: {
       eyebrow: "Procedural kill-runs",
@@ -28,10 +31,10 @@ export function deriveShellModel(state, route) {
       ],
     },
     garage: {
-      eyebrow: "Loadout and lineup",
+      eyebrow: "Player garage hub",
       title: "Garage",
-      intro: "Keep the active chassis, slot browser, and garage pressure separated so the lineup reads cleaner.",
-      tooltip: "Garage slots hold your live lineup. Open bays exist to tempt stronger Foundry rolls, not to pad the screen.",
+      intro: "Garage is the player hub: active chassis, Foundry pressure, style locker, and the pressure log all route from here.",
+      tooltip: "Garage is the player hub. Keep the active chassis visible, switch between Foundry, Style, and Career without leaving the player workspace, and use open bays to tempt stronger rolls.",
       chips: [
         `${liveCars} live`,
         `${state.save.garage.length - liveCars} open`,
@@ -41,7 +44,7 @@ export function deriveShellModel(state, route) {
     foundry: {
       eyebrow: "Flux into metal",
       title: "Foundry",
-      intro: "Break forge, readout, and slot pressure into distinct views so the machine stops crowding the data.",
+      intro: "Keep the forge, readout, and slot pressure in one Foundry split so the Flux decision reads in a single pass.",
       tooltip: "Flux buys three procedural car reveals. Keep any subset, assign them to slots, and sell the rest for Scrap.",
       chips: [
         `${flux} Flux`,
@@ -52,7 +55,7 @@ export function deriveShellModel(state, route) {
     style: {
       eyebrow: "Locker live",
       title: "Style",
-      intro: "Separate the live loadout from the shop grid so the locker reads like a pit wall instead of a catalog dump.",
+      intro: "Keep the live loadout and shop grid together so the locker reads like a pit wall instead of a catalog dump.",
       tooltip: "Scrap buys cosmetics only. The locker should feel like a live pit wall, not a dead spreadsheet.",
       chips: [
         `${scrap} Scrap`,
@@ -63,7 +66,7 @@ export function deriveShellModel(state, route) {
     career: {
       eyebrow: "Pressure log",
       title: "Career",
-      intro: "Split the macro snapshot from the run ledger so each layer stays readable.",
+      intro: "Read the macro snapshot and recent run ledger together so the pressure log stays actionable.",
       tooltip: "Career is the pressure log: medals, PBs, and the last few runs that tell you whether the garage is actually getting meaner.",
       chips: [
         `${state.save.wins || 0} wins`,
@@ -86,16 +89,20 @@ export function deriveShellModel(state, route) {
   return {
     ...screenCopy[route.screen],
     tabs: [
-      { id: "menu-tab-home", screen: "race", label: "Race" },
-      { id: "menu-tab-profile", screen: "garage", label: "Garage" },
-      { id: "menu-tab-foundry", screen: "foundry", label: "Foundry" },
-      { id: "menu-tab-style", screen: "style", label: "Style" },
-      { id: "menu-tab-career", screen: "career", label: "Career" },
-      { id: "menu-tab-settings", screen: "settings", label: "Settings" },
+      { id: "menu-tab-home", screen: "race", label: "Race", active: route.screen === "race" },
+      { id: "menu-tab-profile", screen: "garage", label: "Garage", active: inPlayerHub },
+      { id: "menu-tab-settings", screen: "settings", label: "Settings", active: route.screen === "settings" },
     ],
-    subnav: getSectionOptions(route.screen).map((option) => ({
-      ...option,
-      active: getRouteSection(route) === option.id,
-    })),
+    subnav: inPlayerHub
+      ? [
+        { screen: "garage", label: "Cars", active: route.screen === "garage" },
+        { screen: "foundry", label: "Foundry", active: route.screen === "foundry" },
+        { screen: "style", label: "Style", active: route.screen === "style" },
+        { screen: "career", label: "Career", active: route.screen === "career" },
+      ]
+      : getSectionOptions(route.screen).map((option) => ({
+        ...option,
+        active: getRouteSection(route) === option.id,
+      })),
   };
 }

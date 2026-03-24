@@ -7,6 +7,7 @@ import {
   getStylePreviewSourceLabel,
   getStylePreviewStatusCopy,
 } from "../legacy.js";
+import { getHubPaneSize, isCompactHubPane } from "../layout.js";
 
 function clampPage(page, pageCount) {
   return Math.max(0, Math.min(pageCount - 1, Number.isInteger(page) ? page : 0));
@@ -16,7 +17,9 @@ export function buildStyleModel(state, route) {
   ensureStyleLocker(state.save);
   const activeSlot = route.styleSlot || "skin";
   const slotItems = getCosmeticsBySlot(activeSlot);
-  const pageSize = getStylePageSize(typeof window !== "undefined" ? window.innerWidth * 0.36 : 640);
+  const { width: paneWidth, height: paneHeight } = getHubPaneSize();
+  const compactLandscape = isCompactHubPane(paneWidth, paneHeight);
+  const pageSize = compactLandscape ? 1 : getStylePageSize(paneWidth * 0.36);
   const pageCount = Math.max(1, Math.ceil(slotItems.length / pageSize));
   const page = clampPage(route.stylePage || 0, pageCount);
   const visibleItems = slotItems.slice(page * pageSize, (page + 1) * pageSize);
@@ -36,6 +39,10 @@ export function buildStyleModel(state, route) {
     page,
     pageCount,
     slotCount: slotItems.length,
+    compactLandscape,
+    visibleCountLabel: compactLandscape
+      ? `${visibleItems.length} visible // ${page + 1}/${pageCount}`
+      : `${visibleItems.length} visible // page ${page + 1} / ${pageCount}`,
     slots: COSMETIC_SLOTS,
     equippedItem: activeStyleItem,
     preview: {

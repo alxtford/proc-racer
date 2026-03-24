@@ -237,8 +237,8 @@ function buildCustomSeedEvent(event, customSeed) {
 
 function getResolvedEvent(event, save = state.save) {
   const customSeed = getSavedCustomCourseSeed(event, save);
-  if (customSeed === null) return event;
-  return buildCustomSeedEvent(event, customSeed);
+  if (customSeed === null) return withGeneratedTiming(event);
+  return withGeneratedTiming(buildCustomSeedEvent(event, customSeed));
 }
 
 function createStrikeBoardEvent(template, slotIndex, boardSeed) {
@@ -305,6 +305,20 @@ function getSavedHubEventIndex(eventProgress = state.save.eventProgress) {
   return clamp(eventProgress || 1, 1, getLastStrikeBoardEventIndex());
 }
 
+function withGeneratedTiming(event) {
+  if (!event) return event;
+  if (event.timingSeed === event.seed && Number.isFinite(event.parTime)) return event;
+  const track = buildTrack(event);
+  return {
+    ...event,
+    parTime: track.parTime,
+    timingSeed: event.seed,
+    pathLength: track.metrics?.pathLength ?? null,
+    estimatedLapTime: track.metrics?.estimatedLapTime ?? null,
+    estimatedRaceTime: track.metrics?.estimatedRaceTime ?? null,
+  };
+}
+
 function createEvents() {
   const strikeBoard = ensureStrikeBoardState();
   ensureCustomCourseSeedState();
@@ -320,7 +334,7 @@ function createEvents() {
     };
     persistSave(state.save);
   }
-  state.events = [...buildStrikeBoardEvents(strikeBoard.seed), dailyEvent];
+  state.events = [...buildStrikeBoardEvents(strikeBoard.seed), dailyEvent].map((event) => withGeneratedTiming(event));
   if (!state.save.settings.tutorialCompleted) state.selectedEventIndex = 0;
   else state.selectedEventIndex = getSavedHubEventIndex();
   syncSelectedGarageCar();
@@ -384,6 +398,11 @@ function startRace(eventIndex, carId) {
   }
   state.currentEvent = getResolvedEvent(state.events[eventIndex]);
   state.track = buildTrack(state.currentEvent);
+  state.currentEvent = {
+    ...state.currentEvent,
+    parTime: state.track.parTime,
+    timingSeed: state.currentEvent.seed,
+  };
   state.player = createCar({
     id: selectedCar.id,
     label: selectedCar.name,
@@ -2663,12 +2682,19 @@ function drawBackground() {
 
 function setCamera() {
   let focus = { x: 0, y: 0 };
+  let targetViewScale = clamp(Math.min(state.width / 1280, state.height / 720), 0.54, 0.84);
   if (state.player && state.mode !== "menu") {
     const forward = { x: Math.cos(state.player.angle), y: Math.sin(state.player.angle) };
+    const speed = Math.hypot(state.player.vx, state.player.vy);
+    const speedFactor = clamp(speed / Math.max(220, state.player.def.maxSpeed * 0.9), 0, 1);
+    const boostFactor = clamp(Math.max(state.player.boostTimer * 0.55, state.player.slingshotTimer * 0.9), 0, 1);
+    const leadDistance = 164 + speedFactor * 26 + boostFactor * 18;
     focus = {
-      x: state.player.x + forward.x * 170,
-      y: state.player.y + forward.y * 170,
+      x: state.player.x + forward.x * leadDistance,
+      y: state.player.y + forward.y * leadDistance,
     };
+    const viewportScale = Math.min(state.width / 1280, state.height / 720);
+    targetViewScale = clamp(viewportScale * 0.97 + 0.08 + boostFactor * 0.02, 0.64, 0.95);
   }
   const shakeScale = state.save.settings.reducedShake ? 0.32 : 1;
   state.camera.x = lerp(state.camera.x, focus.x, 0.08);
@@ -2677,7 +2703,7 @@ function setCamera() {
   state.camera.z = lerp(state.camera.z, sampleTrackHeight(state.track, focusT) + 34, 0.12);
   state.camera.jitterX = state.camera.shake > 0 ? (Math.random() - 0.5) * state.camera.shake * 1.6 * shakeScale : 0;
   state.camera.jitterY = state.camera.shake > 0 ? (Math.random() - 0.5) * state.camera.shake * 1.2 * shakeScale : 0;
-  state.viewScale = clamp(Math.min(state.width / 1280, state.height / 720), 0.54, 0.84);
+  state.viewScale = lerp(state.viewScale, targetViewScale, state.mode === "menu" ? 0.18 : 0.1);
 }
 
 function drawTrack() {

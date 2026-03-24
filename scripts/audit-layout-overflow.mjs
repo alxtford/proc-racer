@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
-import { clickFirst, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
+import { goToMenuScreen, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
 
 const outDir = path.resolve("output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -23,8 +23,7 @@ const views = [
     setup: async (page) => {
       await page.click("#start-btn");
       await waitForMenuStage(page, "hub");
-      await clickFirst(page, ["#menu-tab-profile", "#menu-tab-garage"]);
-      await waitForMenuScreen(page, "garage");
+      await goToMenuScreen(page, "garage");
     },
   },
   {
@@ -33,8 +32,7 @@ const views = [
     setup: async (page) => {
       await page.click("#start-btn");
       await waitForMenuStage(page, "hub");
-      await clickFirst(page, ["#menu-tab-foundry", "#profile-tab-foundry"]);
-      await waitForMenuScreen(page, "foundry");
+      await goToMenuScreen(page, "foundry");
     },
   },
   {
@@ -43,8 +41,7 @@ const views = [
     setup: async (page) => {
       await page.click("#start-btn");
       await waitForMenuStage(page, "hub");
-      await clickFirst(page, ["#menu-tab-style", "#profile-tab-style"]);
-      await waitForMenuScreen(page, "style");
+      await goToMenuScreen(page, "style");
     },
   },
   {
@@ -53,8 +50,7 @@ const views = [
     setup: async (page) => {
       await page.click("#start-btn");
       await waitForMenuStage(page, "hub");
-      await clickFirst(page, ["#menu-tab-career", "#profile-tab-career"]);
-      await waitForMenuScreen(page, "career");
+      await goToMenuScreen(page, "career");
     },
   },
   {
@@ -63,8 +59,7 @@ const views = [
     setup: async (page) => {
       await page.click("#start-btn");
       await waitForMenuStage(page, "hub");
-      await clickFirst(page, ["#menu-tab-foundry", "#profile-tab-foundry"]);
-      await waitForMenuScreen(page, "foundry");
+      await goToMenuScreen(page, "foundry");
       await page.click("#garage-roll-btn");
       await page.waitForTimeout(2400);
     },

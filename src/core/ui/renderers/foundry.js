@@ -1,6 +1,12 @@
 import { renderInfoButton, renderIsoCarFigure, renderSummaryGrid } from "../render-helpers.js";
 
 function renderFoundryForge(model) {
+  const headActions = `
+    <div class="section-head-actions workspace-foundry-head-actions">
+      <div id="garage-currency" class="section-note">${model.flux} Flux</div>
+      <button id="garage-roll-btn" class="start-btn section-action-btn workspace-foundry-head-action" type="button" ${model.rollDisabled ? "disabled" : ""}>${model.rollLabel}</button>
+    </div>
+  `;
   return `
     <section class="selection-block workspace-foundry-machine">
       <div class="section-head">
@@ -8,9 +14,9 @@ function renderFoundryForge(model) {
           <div class="section-label">Flux Foundry</div>
           ${renderInfoButton("gacha-info-btn", "Foundry help", "Flux buys three procedural car reveals. Keep any subset, assign each one to a slot, and scrap the rest.")}
         </div>
-        <div id="garage-currency" class="section-note">${model.flux} Flux</div>
+        ${headActions}
       </div>
-      <div class="gacha-machine workspace-foundry-machine-body">
+      <div class="gacha-machine workspace-foundry-machine-body${model.compactLandscape ? " workspace-foundry-machine-body-compact" : ""}">
         <div class="gacha-machine-hero">
           <div class="workspace-foundry-car">
             ${renderIsoCarFigure(model.selectedCar, { role: "Forge anchor" })}
@@ -24,16 +30,13 @@ function renderFoundryForge(model) {
         </div>
         <div class="gacha-machine-side">
           <div class="gacha-machine-copy">
-            <div class="focus-title">Crack 3 Procedural Cars</div>
+            <div class="focus-title">${model.machineTitle}</div>
             <div id="gacha-roll-copy" class="focus-copy">${model.rollCopy}</div>
             <div class="mini-tags">
               <span class="mini-tag">3 capsules</span>
               <span class="mini-tag">Replace any slot</span>
               <span class="mini-tag">Unused cars scrap back</span>
             </div>
-          </div>
-          <div class="action-row gacha-actions">
-            <button id="garage-roll-btn" class="start-btn" ${model.rollDisabled ? "disabled" : ""}>${model.rollLabel}</button>
           </div>
         </div>
       </div>
@@ -72,25 +75,12 @@ function renderFoundrySlots(model) {
   `;
 }
 
-export function renderFoundryScreen(model, section) {
-  if (section === "readout") {
-    return `
-      <div class="workspace-screen workspace-screen-foundry workspace-screen-sectioned">
-        ${renderFoundryReadout(model)}
-      </div>
-    `;
-  }
-  if (section === "slots") {
-    return `
-      <div class="workspace-screen workspace-screen-foundry workspace-screen-sectioned">
-        ${renderFoundrySlots(model)}
-      </div>
-    `;
-  }
+export function renderFoundryScreen(model) {
   return `
-    <div class="workspace-screen workspace-screen-foundry workspace-screen-sectioned">
+    <div class="workspace-screen workspace-screen-foundry${model.compactLandscape ? " workspace-screen-foundry-compact" : ""}">
       ${renderFoundryForge(model)}
       ${renderFoundryReadout(model)}
+      ${renderFoundrySlots(model)}
     </div>
   `;
 }

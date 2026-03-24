@@ -190,9 +190,50 @@ If a change adds complexity but does not improve one of those, it is probably th
   - inspect the screenshots directly, not just their existence
 - Useful recurring checks in this repo include:
   - `node scripts/capture-ui-states.mjs`
+  - `node scripts/capture-responsive-layouts.mjs`
+  - `node scripts/capture-subnav-layouts.mjs`
+  - `node scripts/audit-layout-overflow.mjs`
+  - `node scripts/review-section-breakpoints.mjs`
+  - `node scripts/check-garage-loop.mjs`
+  - `node scripts/check-copy-audio.mjs`
   - `node scripts/review-race-scenes.mjs`
   - `npm run validate:content`
 - Prefer evidence-backed fixes over assumption-driven tweaks.
+
+### UI Review Script Map
+
+- Use `node scripts/review-section-breakpoints.mjs` when doing breakpoint or section-placement review work across the main hub screens. It captures `Race`, `Garage`, `Foundry`, `Style`, `Career`, and `Settings` at `1920x1080`, `1536x864`, `1441x900`, `1366x768`, `800x600`, `844x390`, and `812x375`, and writes screenshots plus geometry JSON to `output/section-review-current/`.
+- Use `node scripts/capture-responsive-layouts.mjs` for a faster smoke pass on the standard shell states (`splash`, `setup`, `garage`, `foundry`, `settings`, `pause`) without generating the full breakpoint matrix.
+- Use `node scripts/capture-ui-states.mjs` when you need canonical screenshots paired with `render_game_to_text` JSON for the major menu, race, pause, and results states.
+- Use `node scripts/capture-subnav-layouts.mjs` after nav, subnav, or route-section changes to verify that top-level tabs and workspace subtabs still land on the intended screens and sections.
+- Use `node scripts/audit-layout-overflow.mjs` when viewport fit, clipping, or hidden overflow is in question. Treat it as a geometry audit, not a substitute for screenshot review.
+- Use `node scripts/check-garage-loop.mjs` after changes that touch `Garage`, `Foundry`, `Style`, roll/equip flows, or currencies. It exercises the Foundry roll plus Style purchase/equip loop and writes a focused report to `output/`.
+- Use `node scripts/check-copy-audio.mjs` after tooltip timing, copy clamping, menu text density, or menu/race audio-state changes. It checks tooltip modes, copy overflow, and menu/race/pause audio transitions.
+- Use `node scripts/review-race-scenes.mjs` after race presentation, environment art direction, or track-readability changes. It captures targeted race scenes rather than menu shells.
+
+### Preferred UI Validation Sequences
+
+- For general menu-shell or breakpoint work:
+  - `node scripts/review-section-breakpoints.mjs`
+  - `node scripts/capture-responsive-layouts.mjs`
+  - `node scripts/audit-layout-overflow.mjs`
+  - `npm run validate`
+- For nav or subnav changes:
+  - `node scripts/capture-subnav-layouts.mjs`
+  - `node scripts/capture-ui-states.mjs`
+  - `npm run validate`
+- For `Garage` / `Foundry` / `Style` loop changes:
+  - `node scripts/check-garage-loop.mjs`
+  - `node scripts/review-section-breakpoints.mjs`
+  - `npm run validate`
+- For tooltip / copy / audio changes:
+  - `node scripts/check-copy-audio.mjs`
+  - `node scripts/capture-ui-states.mjs`
+  - `npm run validate`
+- For race-view visual changes:
+  - `node scripts/review-race-scenes.mjs`
+  - `node scripts/capture-ui-states.mjs`
+  - `npm run validate`
 
 ## Change Heuristics For Future Agents
 

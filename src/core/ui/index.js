@@ -52,9 +52,6 @@ function createRefs() {
     hubScreen: document.getElementById("hub-screen"),
     menuTabHome: document.getElementById("menu-tab-home"),
     menuTabProfile: document.getElementById("menu-tab-profile"),
-    menuTabFoundry: document.getElementById("menu-tab-foundry"),
-    menuTabStyle: document.getElementById("menu-tab-style"),
-    menuTabCareer: document.getElementById("menu-tab-career"),
     menuTabSettings: document.getElementById("menu-tab-settings"),
     banner: document.getElementById("banner"),
     toast: document.getElementById("race-toast"),
@@ -142,6 +139,7 @@ export function createUi(state, callbacks = {}) {
     lastScreen: null,
     resultsPane: "summary",
   };
+  let resizeFrame = null;
 
   function getScreenEl(id) {
     return refs.hubScreen?.querySelector(`#${id}`) || null;
@@ -202,6 +200,15 @@ export function createUi(state, callbacks = {}) {
 
   function updateMenuScale() {
     if (uiState.tooltipButton && !refs.tooltip.classList.contains("hidden")) positionTooltip(uiState.tooltipButton);
+  }
+
+  function handleViewportResize() {
+    if (resizeFrame !== null) window.cancelAnimationFrame(resizeFrame);
+    resizeFrame = window.requestAnimationFrame(() => {
+      resizeFrame = null;
+      if (uiState.menuOpen) syncMenu();
+      else updateMenuScale();
+    });
   }
 
   function syncVisualSettings() {
@@ -632,12 +639,13 @@ export function createUi(state, callbacks = {}) {
   refs.resultsTabField.addEventListener("click", () => setResultsPane("field"));
   refs.menuTabHome?.addEventListener("click", () => setRouteScreen("race"));
   refs.menuTabProfile?.addEventListener("click", () => setRouteScreen("garage"));
-  refs.menuTabFoundry?.addEventListener("click", () => setRouteScreen("foundry"));
-  refs.menuTabStyle?.addEventListener("click", () => setRouteScreen("style"));
-  refs.menuTabCareer?.addEventListener("click", () => setRouteScreen("career"));
   refs.menuTabSettings?.addEventListener("click", () => setRouteScreen("settings"));
   refs.hubSubnav?.addEventListener("click", (event) => {
     const target = closestButtonTarget(event.target);
+    if (target?.dataset.routeScreen) {
+      setRouteScreen(target.dataset.routeScreen);
+      return;
+    }
     if (!target?.dataset.routeSection) return;
     setRouteSection(target.dataset.routeSection);
   });
@@ -772,7 +780,7 @@ export function createUi(state, callbacks = {}) {
     }
     showTooltip(button, "click");
   });
-  window.addEventListener("resize", updateMenuScale);
+  window.addEventListener("resize", handleViewportResize);
 
   return {
     refs,

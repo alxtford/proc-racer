@@ -5,10 +5,7 @@ const AUDIO_CONTEXT_ERROR = "The AudioContext encountered an error from the audi
 
 const SCREEN_SELECTORS = {
   race: ["#menu-tab-home"],
-  garage: ["#menu-tab-profile", "#menu-tab-garage"],
-  foundry: ["#menu-tab-foundry", "#profile-tab-foundry"],
-  style: ["#menu-tab-style", "#profile-tab-style"],
-  career: ["#menu-tab-career", "#profile-tab-career"],
+  garage: ["#menu-tab-profile", '[data-route-screen="garage"]'],
   settings: ["#menu-tab-settings"],
 };
 
@@ -54,6 +51,15 @@ export async function enterHub(page) {
 }
 
 export async function goToScreen(page, screen) {
+  if (screen === "foundry" || screen === "style" || screen === "career") {
+    await clickFirst(page, SCREEN_SELECTORS.garage);
+    await waitForMenuScreen(page, "garage");
+    const hubTab = page.locator(`[data-route-screen="${screen}"]`).first();
+    await expect(hubTab).toBeVisible();
+    await hubTab.click();
+    await waitForMenuScreen(page, screen);
+    return;
+  }
   const selectors = SCREEN_SELECTORS[screen];
   if (!selectors) throw new Error(`Unsupported menu screen: ${screen}`);
   await clickFirst(page, selectors);
@@ -61,7 +67,7 @@ export async function goToScreen(page, screen) {
 }
 
 export async function goToSection(page, section) {
-  const sectionButton = page.locator(`[data-route-section="${section}"]`).first();
+  const sectionButton = page.locator(`#hub-subnav [data-route-section="${section}"]`).first();
   await expect(sectionButton).toBeVisible();
   await sectionButton.click();
   await expect.poll(async () => page.locator("#hub-screen").getAttribute("data-section")).toBe(section);

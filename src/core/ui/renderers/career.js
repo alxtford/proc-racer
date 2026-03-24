@@ -44,10 +44,11 @@ function renderCareerRuns(model) {
   `;
 }
 
-export function renderCareerScreen(model, section) {
+export function renderCareerScreen(model) {
   return `
-    <div class="workspace-screen workspace-screen-career workspace-screen-sectioned">
-      ${section === "runs" ? renderCareerRuns(model) : renderCareerSnapshot(model)}
+    <div class="workspace-screen workspace-screen-career">
+      ${renderCareerSnapshot(model)}
+      ${renderCareerRuns(model)}
     </div>
   `;
 }

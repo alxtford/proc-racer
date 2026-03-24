@@ -1,6 +1,6 @@
 import path from "node:path";
 import { chromium } from "playwright";
-import { clickFirst, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
+import { goToMenuScreen, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
 
 const outputDir = path.resolve(process.cwd(), "output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -31,12 +31,7 @@ async function captureGarage(browser, viewport, name, pane = "garage") {
   await page.goto(BASE_URL, { waitUntil: "domcontentloaded" });
   await page.click("#start-btn");
   await waitForMenuStage(page, "hub");
-  await clickFirst(page, ["#menu-tab-profile", "#menu-tab-garage"]);
-  await waitForMenuScreen(page, "garage");
-  if (pane !== "garage") {
-    await clickFirst(page, [`#menu-tab-${pane}`, `#profile-tab-${pane}`]);
-    await waitForMenuScreen(page, pane);
-  }
+  await goToMenuScreen(page, pane);
   await page.waitForTimeout(260);
   await page.screenshot({ path: path.join(outputDir, `${name}.png`) });
   await page.close();

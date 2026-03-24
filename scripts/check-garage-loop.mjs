@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
-import { clickFirst, waitForMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
+import { goToMenuScreen, waitForMenuStage } from "./menu-helpers.mjs";
 
 const outDir = path.resolve("output");
 const BASE_URL = process.env.PROC_RACER_BASE_URL || "http://127.0.0.1:4173";
@@ -27,8 +27,7 @@ await page.waitForSelector("#start-btn", { state: "visible" });
 await page.click("#start-btn");
 await waitForMenuStage(page, "hub");
 await page.waitForSelector("#launch-btn", { state: "visible" });
-await clickFirst(page, ["#menu-tab-foundry", "#profile-tab-foundry"]);
-await waitForMenuScreen(page, "foundry");
+await goToMenuScreen(page, "foundry");
 
 const initialState = JSON.parse(await page.evaluate(() => window.render_game_to_text()));
 
@@ -53,12 +52,7 @@ await page.evaluate(() => {
   window.__procRacerUi.syncMenu();
 });
 
-await clickFirst(page, ["#menu-tab-style", "#profile-tab-style"]);
-await waitForMenuScreen(page, "style");
-if (await page.locator('[data-route-section="shop"]').count()) {
-  await page.click('[data-route-section="shop"]');
-  await page.waitForTimeout(120);
-}
+await goToMenuScreen(page, "style");
 
 const nextStylePageButton = page.locator('[data-style-page-nav="1"]').first();
 let pageTurns = 0;
@@ -83,11 +77,6 @@ if (!(await buyButton.count())) {
   } else {
     errors.push(`Bought style ${styleId} but could not find the equip action.`);
   }
-}
-
-if (await page.locator('[data-route-section="loadout"]').count()) {
-  await page.click('[data-route-section="loadout"]');
-  await page.waitForTimeout(120);
 }
 
 await page.waitForTimeout(180);

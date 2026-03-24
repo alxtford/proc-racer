@@ -760,12 +760,14 @@ function handleSurgeStrips(ctx, car) {
     const dy = car.y - strip.y;
     const along = dx * strip.tangent.x + dy * strip.tangent.y;
     const across = dx * strip.normal.x + dy * strip.normal.y;
-    if (Math.abs(along) < strip.length * 0.5 && Math.abs(across) < strip.width * 0.5) {
+    const halfLength = strip.length * 0.5 + car.length * 0.18;
+    const halfWidth = strip.width * 0.5 + car.width * 0.38;
+    if (Math.abs(along) < halfLength && Math.abs(across) < halfWidth) {
       car.boostTimer = Math.max(car.boostTimer, strip.sectorTag === "high-speed" ? 1.25 : 0.85);
       car.slingshotTimer = Math.max(car.slingshotTimer, strip.sectorTag === "high-speed" ? 0.72 : 0.4);
       car.assistTimer = Math.max(car.assistTimer, 0.28);
       car.stripCooldown = 1.1;
-      ctx.state.fx.push({ kind: "surge-strip", x: car.x, y: car.y, radius: strip.width * 0.4, angle: strip.angle, life: 0.28, color: strip.color });
+      ctx.state.fx.push({ kind: "surge-strip", x: car.x, y: car.y, radius: strip.width * 0.44, angle: strip.angle, life: 0.28, color: strip.color });
       ctx.bus.emit("surge_strip", { player: car.isPlayer, sectorTag: strip.sectorTag });
       break;
     }
