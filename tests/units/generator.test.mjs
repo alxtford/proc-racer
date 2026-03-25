@@ -9,6 +9,7 @@ import {
   sampleTrackBank,
   sampleTrackHeight,
 } from "../../src/core/generator.js";
+import { createCar } from "../../src/core/gameplay.js";
 import { createDailyEvent, EVENT_TEMPLATES } from "../../src/data/content.js";
 
 const approx = (actual, expected, epsilon = 1e-6) => {
@@ -122,6 +123,44 @@ describe("generator.js", () => {
       const sample = track.elevationSamples[10];
       approx(sampleTrackHeight(track, sample.t), sample.height);
       approx(sampleTrackBank(track, sample.t), sample.bank);
+    });
+
+    it("pins sprint finishes to the path end and stages the grid behind the start line", () => {
+      const event = getEvent("shatterline");
+      const track = buildTrack(event);
+      assert.strictEqual(track.finishT, 1);
+      assert.strictEqual(track.finishLine.t, 1);
+      assert.ok(Math.hypot(track.finishLine.tangent.x, track.finishLine.tangent.y) > 0.99);
+      assert.ok(track.startT >= 0.14, `expected sprint startT to leave staging room, got ${track.startT}`);
+
+      const totalCars = 1 + (event.aiCount || 0);
+      for (let slot = 0; slot < totalCars; slot += 1) {
+        const car = createCar(slot === 0 ? "balanced" : "interceptor", slot === 0, slot, track);
+        const dx = car.x - track.startLine.x;
+        const dy = car.y - track.startLine.y;
+        const signedDistance = dx * track.startLine.tangent.x + dy * track.startLine.tangent.y;
+        assert.ok(signedDistance < 0, `expected slot ${slot} to stage behind the start line, got ${signedDistance}`);
+        assert.strictEqual(car.startLineCleared, false);
+        assert.strictEqual(car.progress, 0);
+      }
+    });
+
+    it("builds broad sprint overdrive lanes in the high-speed sectors", () => {
+      const track = buildTrack(getEvent("grid-slipstream"));
+      const highSpeedStrips = track.surgeStrips.filter((strip) => strip.sectorTag === "high-speed");
+      assert.ok(highSpeedStrips.length >= 2, `expected at least two sprint overdrive lanes, got ${highSpeedStrips.length}`);
+      assert.ok(
+        highSpeedStrips.every((strip) => strip.width >= track.width * 0.55),
+        JSON.stringify(highSpeedStrips.map((strip) => ({ width: strip.width, trackWidth: track.width })), null, 2),
+      );
+      assert.ok(
+        highSpeedStrips.some((strip) => Math.abs(strip.laneOffset) >= track.width * 0.08),
+        JSON.stringify(highSpeedStrips.map((strip) => ({ laneOffset: strip.laneOffset, trackWidth: track.width })), null, 2),
+      );
+      assert.ok(
+        highSpeedStrips.every((strip) => strip.length >= 120),
+        JSON.stringify(highSpeedStrips.map((strip) => ({ length: strip.length })), null, 2),
+      );
     });
   });
 });

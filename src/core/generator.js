@@ -70,14 +70,14 @@ const TRACK_WIDTH_SCALE = 1.5;
 
 const SURGE_STRIP_CONFIG = {
   "high-speed": {
-    widthFactor: 0.48,
-    length: 96,
-    laneOffsetFactor: 0.26,
+    widthFactor: 0.62,
+    length: 128,
+    laneOffsetFactor: 0.18,
   },
   recovery: {
-    widthFactor: 0.36,
-    length: 70,
-    laneOffsetFactor: 0.18,
+    widthFactor: 0.48,
+    length: 92,
+    laneOffsetFactor: 0.12,
   },
 };
 
@@ -581,8 +581,16 @@ function buildSectorProfiles(points, event, sectorCount) {
         index,
         start,
         end: closed ? rawEnd : start + span,
+        span,
         avgTurn: samples ? totalTurn / samples : 0,
         peakTurn,
+        attackScore: clamp(
+          (1 - clamp((samples ? totalTurn / samples : 0) / 1.05, 0, 1)) * 0.62
+            + (1 - clamp(peakTurn / 1.2, 0, 1)) * 0.18
+            + clamp(span * (closed ? 5.2 : 6.4), 0, 1) * 0.2,
+          0,
+          1,
+        ),
       };
     });
     const scores = profiles.map((profile) => profile.avgTurn + profile.peakTurn * 0.35);
@@ -622,6 +630,9 @@ function buildSectors(points, event, rng, biome) {
   const closed = event.type === "circuit";
   const byLowTurn = [...profiles].sort((a, b) => a.avgTurn - b.avgTurn).map((profile) => profile.index);
   const byHighTurn = [...profiles].sort((a, b) => b.avgTurn - a.avgTurn || b.peakTurn - a.peakTurn).map((profile) => profile.index);
+  const byAttackScore = [...profiles]
+    .sort((a, b) => b.attackScore - a.attackScore || a.avgTurn - b.avgTurn || a.peakTurn - b.peakTurn)
+    .map((profile) => profile.index);
   const tags = new Array(sectorCount).fill("recovery");
   const assign = (tag, index) => {
     tags[index] = tag;
@@ -630,7 +641,7 @@ function buildSectors(points, event, rng, biome) {
   const highSpeedCount = event.type === "circuit" ? 2 : 2;
   const technicalCount = event.type === "circuit" ? 2 : 1;
   for (let i = 0; i < highSpeedCount; i += 1) {
-    assign("high-speed", claimSectorIndex(byLowTurn, used, sectorCount, closed));
+    assign("high-speed", claimSectorIndex(byAttackScore, used, sectorCount, closed));
   }
   for (let i = 0; i < technicalCount; i += 1) {
     assign("technical", claimSectorIndex(byHighTurn, used, sectorCount, closed));
@@ -649,21 +660,35 @@ function buildSectors(points, event, rng, biome) {
     const names = SECTOR_NAME_BANK[biome.id]?.[tag] || [`${biome.name} ${tag}`];
     const callout = SECTOR_CALLOUTS[tag] || SECTOR_CALLOUTS["high-speed"];
     const turnBias = clamp(profile.avgTurn / 1.05, 0, 1);
+    const passingScore = profile.attackScore;
     return {
       id: `${tag}-${index}`,
       start: profile.start,
       end: profile.end,
+      span: profile.span,
       tag,
       name: names[index % names.length],
       shortCallout: callout.short,
       longCallout: callout.long,
       avgTurn: profile.avgTurn,
       peakTurn: profile.peakTurn,
-      gripMultiplier: tag === "technical" ? 1.08 + turnBias * 0.08 : tag === "high-speed" ? 0.92 - turnBias * 0.03 : tag === "recovery" ? 1.1 : 0.98 + turnBias * 0.03,
-      speedBias: tag === "high-speed" ? 1.06 + (1 - turnBias) * 0.05 : tag === "hazard" ? 0.94 : tag === "recovery" ? 1.01 : 0.98,
+      passingScore,
+      attackLaneBias: tag === "high-speed"
+        ? 0.18 + passingScore * 0.16
+        : tag === "recovery"
+          ? 0.08 + passingScore * 0.1
+          : 0.04,
+      gripMultiplier: tag === "technical" ? 1.08 + turnBias * 0.08 : tag === "high-speed" ? 0.94 - turnBias * 0.02 : tag === "recovery" ? 1.1 : 0.98 + turnBias * 0.03,
+      speedBias: tag === "high-speed"
+        ? 1.08 + (1 - turnBias) * 0.06 + passingScore * 0.03
+        : tag === "hazard"
+          ? 0.94
+          : tag === "recovery"
+            ? 1.01 + passingScore * 0.02
+            : 0.98,
       hazardBias: tag === "hazard" ? 1.45 + turnBias * 0.18 : tag === "recovery" ? 0.58 : 1,
-      pickupBias: tag === "recovery" ? 1.24 : tag === "high-speed" ? 1.1 : 1,
-      lookAheadBias: 0.01 + rng() * 0.008,
+      pickupBias: tag === "recovery" ? 1.24 : tag === "high-speed" ? 1.14 : 1,
+      lookAheadBias: 0.01 + rng() * 0.008 + (tag === "high-speed" ? passingScore * 0.004 : 0),
     };
   });
 }
@@ -706,12 +731,22 @@ function sampleSectorT(sector, mix, closed) {
 }
 
 function samplePathPose(points, t, closed = true) {
-  const point = samplePath(points, t, closed);
-  const next = samplePath(points, closed ? t + 0.003 : clamp(t + 0.003, 0, 1), closed);
-  const tangent = normalize(next.x - point.x, next.y - point.y);
+  const clampedT = closed ? wrapT(t) : clamp(t, 0, 1);
+  const point = samplePath(points, clampedT, closed);
+  const nextT = closed
+    ? clampedT + 0.003
+    : clamp(clampedT + 0.003, 0, 1);
+  const prevT = closed
+    ? clampedT - 0.003
+    : clamp(clampedT - 0.003, 0, 1);
+  const next = samplePath(points, nextT, closed);
+  const prev = samplePath(points, prevT, closed);
+  const tangent = !closed && clampedT >= 0.997
+    ? normalize(point.x - prev.x, point.y - prev.y)
+    : normalize(next.x - point.x, next.y - point.y);
   return {
     ...point,
-    t: closed ? wrapT(t) : clamp(t, 0, 1),
+    t: clampedT,
     tangent,
     normal: { x: -tangent.y, y: tangent.x },
     angle: Math.atan2(tangent.y, tangent.x),
@@ -785,8 +820,8 @@ function chooseTrackAnchors(points, event, width) {
       finishLine: startLine,
     };
   }
-  const startT = pickStraightCandidate(points, false, 0.04, 0.16, 0.08);
-  const finishT = pickStraightCandidate(points, false, 0.84, 0.96, 0.92);
+  const startT = pickStraightCandidate(points, false, 0.14, 0.26, 0.18);
+  const finishT = 1;
   return {
     startT,
     finishT,
@@ -834,20 +869,44 @@ function pickPropKind(biome, rng, side, index) {
 
 function buildSurgeStrips(points, event, sectors, width, rng) {
   const circuit = event.type === "circuit";
-  const candidates = sectors.filter((sector) => sector.tag === "high-speed" || sector.tag === "recovery");
-  const targetCount = Math.min(candidates.length + (event.modifierIds.includes("dense-traffic") ? 1 : 0), circuit ? 4 : 3);
+  const highSpeedCandidates = sectors
+    .filter((sector) => sector.tag === "high-speed")
+    .sort((a, b) => b.passingScore - a.passingScore);
+  const recoveryCandidates = sectors
+    .filter((sector) => sector.tag === "recovery")
+    .sort((a, b) => b.passingScore - a.passingScore);
+  const candidates = [
+    ...highSpeedCandidates.flatMap((sector, index) => [
+      { sector, mix: 0.24, laneSign: index % 2 === 0 ? 1 : -1 },
+      { sector, mix: 0.68, laneSign: index % 2 === 0 ? -1 : 1 },
+    ]),
+    ...recoveryCandidates.map((sector, index) => ({
+      sector,
+      mix: 0.4 + index * 0.12,
+      laneSign: 0,
+    })),
+  ];
+  const targetCount = Math.min(
+    candidates.length + (event.modifierIds.includes("dense-traffic") ? 1 : 0),
+    circuit ? 5 : 4,
+  );
   const strips = [];
   for (let i = 0; i < targetCount; i += 1) {
-    const sector = candidates[i % candidates.length];
+    const candidate = candidates[i % candidates.length];
+    const sector = candidate?.sector;
     if (!sector) break;
-    const sectorMix = sector.tag === "high-speed" ? 0.26 + (i % 2) * 0.28 : 0.48;
-    const t = sampleSectorT(sector, clamp(sectorMix + (rng() - 0.5) * 0.12, 0.15, 0.82), circuit);
+    const sectorMix = sector.tag === "high-speed"
+      ? clamp(candidate.mix + (rng() - 0.5) * 0.08, 0.16, 0.84)
+      : clamp(candidate.mix + (rng() - 0.5) * 0.1, 0.18, 0.82);
+    const t = sampleSectorT(sector, sectorMix, circuit);
     const point = samplePath(points, t, circuit);
     const next = samplePath(points, t + 0.003, circuit);
     const tangent = normalize(next.x - point.x, next.y - point.y);
     const normal = { x: -tangent.y, y: tangent.x };
     const stripConfig = SURGE_STRIP_CONFIG[sector.tag] || SURGE_STRIP_CONFIG.recovery;
-    const laneOffset = (rng() - 0.5) * width * stripConfig.laneOffsetFactor;
+    const laneOffset = candidate.laneSign === 0
+      ? (rng() - 0.5) * width * stripConfig.laneOffsetFactor * 0.55
+      : candidate.laneSign * width * (0.09 + (sector.attackLaneBias || 0.12) * 0.12);
     strips.push({
       id: `surge-${sector.id}-${i}`,
       x: point.x + normal.x * laneOffset,
