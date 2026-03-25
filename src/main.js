@@ -1,3 +1,4 @@
+import { inject } from '@vercel/analytics';
 import { createAudioSystem } from "./core/audio.js";
 import { getControlBinding } from "./core/controls.js";
 import { COURSE_REROLL_COST, getCurrencyBalance, grantCurrency, purchaseStoreProduct } from "./core/economy.js";
@@ -94,6 +95,8 @@ const state = {
 
 const audio = createAudioSystem(bus, () => state);
 
+// Initialize Vercel Web Analytics
+inject();
 function applyMenuScreen(screen) {
   state.menuScreen = screen;
   state.menuView = screen === "race" ? "home" : screen === "settings" ? "settings" : "profile";
