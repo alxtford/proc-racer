@@ -22,19 +22,19 @@ export function deriveShellModel(state, route) {
     race: {
       eyebrow: "Procedural kill-runs",
       title: "Race",
-      intro: "Split launch, board, and course tools into one fast race workspace.",
-      tooltip: raceEvent ? getMenuOverviewTooltip(state, raceEvent) : "Pick a line and launch in seconds.",
+      intro: "Pick a run and launch.",
+      tooltip: raceEvent ? getMenuOverviewTooltip(state, raceEvent) : "Pick a run and launch.",
       chips: [
-        raceEvent ? "Strike board live" : "Run cold",
-        getGhostReady(state, raceEvent) ? "Ghost ready" : "Ghost cold",
+        raceEvent ? "Board live" : "No run",
+        getGhostReady(state, raceEvent) ? "Ghost ready" : "No ghost",
         `${flux} Flux`,
       ],
     },
     garage: {
       eyebrow: "Player garage hub",
       title: "Garage",
-      intro: "Garage is the player hub: active chassis, Foundry pressure, style locker, and the pressure log all route from here.",
-      tooltip: "Garage is the player hub. Keep the active chassis visible, switch between Foundry, Style, and Career without leaving the player workspace, and use open bays to tempt stronger rolls.",
+      intro: "Choose your launch car.",
+      tooltip: "Pick your launch car. Open bays make Foundry rolls matter.",
       chips: [
         `${liveCars} live`,
         `${state.save.garage.length - liveCars} open`,
@@ -44,8 +44,8 @@ export function deriveShellModel(state, route) {
     foundry: {
       eyebrow: "Flux into metal",
       title: "Foundry",
-      intro: "Keep the forge, readout, and slot pressure in one Foundry split so the Flux decision reads in a single pass.",
-      tooltip: "Flux buys three procedural car reveals. Keep any subset, assign them to slots, and sell the rest for Scrap.",
+      intro: "Roll three cars. Keep what earns a slot.",
+      tooltip: "Flux buys three cars. Keep the upgrades and scrap the rest.",
       chips: [
         `${flux} Flux`,
         getRollReadyStatus(state.save) ? "Roll ready" : `${Math.max(0, GARAGE_ROLL_COST - flux)} Flux short`,
@@ -55,19 +55,19 @@ export function deriveShellModel(state, route) {
     style: {
       eyebrow: "Locker live",
       title: "Style",
-      intro: "Keep the live loadout and shop grid together so the locker reads like a pit wall instead of a catalog dump.",
-      tooltip: "Scrap buys cosmetics only. The locker should feel like a live pit wall, not a dead spreadsheet.",
+      intro: "Spend Scrap on cosmetics.",
+      tooltip: "Preview cosmetics before you buy or equip.",
       chips: [
         `${scrap} Scrap`,
         `${Object.keys(state.save.equippedCosmetics || {}).length || 0} equipped`,
-        "Preview live",
+        "Preview",
       ],
     },
     career: {
       eyebrow: "Pressure log",
       title: "Career",
-      intro: "Read the macro snapshot and recent run ledger together so the pressure log stays actionable.",
-      tooltip: "Career is the pressure log: medals, PBs, and the last few runs that tell you whether the garage is actually getting meaner.",
+      intro: "Track runs, pace, and wrecks.",
+      tooltip: "Check medals, PBs, and recent runs.",
       chips: [
         `${state.save.wins || 0} wins`,
         `${state.save.runHistory?.length || 0} runs logged`,
@@ -77,8 +77,8 @@ export function deriveShellModel(state, route) {
     settings: {
       eyebrow: "Comfort and controls",
       title: "Settings",
-      intro: "Separate comfort tuning from bindings so setup is quick without piling every control on one page.",
-      tooltip: "Comfort settings and bindings update live. This screen should solve friction quickly, not hide device setup behind another subtab.",
+      intro: "Tune comfort and controls.",
+      tooltip: "Comfort settings and bindings update live.",
       chips: [
         state.save.settings.controlMode === "custom" ? "Custom bindings" : "Hybrid input",
         state.save.settings.assistLevel || "standard assist",

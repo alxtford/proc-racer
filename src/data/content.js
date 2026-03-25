@@ -126,9 +126,9 @@ export const CAR_DEFS = {
     trimProfile: "splitter",
     visualLength: 46,
     visualWidth: 25,
-    description: "bites hard into corners, weaker top end",
+    description: "sharp turn-in, weaker top end",
     role: "Line cutter",
-    guidance: "Snap into apexes and carve through traffic before the straight opens up.",
+    guidance: "Cuts apexes and traffic before the straight opens.",
     traits: ["cornering", "precise"],
   },
   muscle: {
@@ -148,9 +148,9 @@ export const CAR_DEFS = {
     trimProfile: "hammer",
     visualLength: 51,
     visualWidth: 29,
-    description: "brutal launch, wide arc steering",
+    description: "violent launch, wide steering",
     role: "Launch",
-    guidance: "Fast off the line, heavier through tight bends.",
+    guidance: "Explodes off the line, drifts wide in tight bends.",
     traits: ["acceleration", "heavy"],
   },
   interceptor: {
@@ -170,9 +170,9 @@ export const CAR_DEFS = {
     trimProfile: "spear",
     visualLength: 52,
     visualWidth: 24,
-    description: "highest velocity, twitchier under impact",
+    description: "top-end missile, twitchy on impact",
     role: "Fastest",
-    guidance: "Top-end speed with the highest risk after contact.",
+    guidance: "Highest top end, highest risk after contact.",
     traits: ["top speed", "risky"],
   },
   balanced: {
@@ -192,9 +192,9 @@ export const CAR_DEFS = {
     trimProfile: "alloy",
     visualLength: 49,
     visualWidth: 27,
-    description: "unlocked all-rounder with no dead angle",
+    description: "steady all-rounder",
     role: "All-rounder",
-    guidance: "Not the fastest machine alive, but it keeps enough bite everywhere.",
+    guidance: "Strong enough everywhere.",
     traits: ["stable", "versatile"],
   },
 };
@@ -209,7 +209,7 @@ export const EVENT_TEMPLATES = [
     seed: 903,
     biomeId: "industrial",
     modifierIds: ["shield-drops"],
-    summary: "Guided opener teaching pickups, chassis damage, and momentum carry.",
+    summary: "Guided opener for pickups, hits, and momentum.",
     aiProfiles: ["rookie", "stable"],
     parTime: 72,
     goals: [
@@ -229,7 +229,7 @@ export const EVENT_TEMPLATES = [
     seed: 1103,
     biomeId: "industrial",
     modifierIds: ["fragile-barriers"],
-    summary: "Forge Ward loop with hard contact and a clean first bloodline.",
+    summary: "Hard-contact loop with one clean line through it.",
     aiProfiles: ["stable", "hunter"],
     parTime: 95,
     goals: [
@@ -247,7 +247,7 @@ export const EVENT_TEMPLATES = [
     seed: 2088,
     biomeId: "freeway",
     modifierIds: ["dense-pickups"],
-    summary: "Long causeway sprint with overdrive lanes and room for reckless passes.",
+    summary: "Long sprint with overdrive lanes and room to pass.",
     aiProfiles: ["stable", "hunter"],
     parTime: 88,
     goals: [
@@ -265,7 +265,7 @@ export const EVENT_TEMPLATES = [
     seed: 3155,
     biomeId: "void",
     modifierIds: ["high-damage-hazards", "rival-pressure"],
-    summary: "Blackglass loop where clean exits matter more than brute force.",
+    summary: "Clean exits beat brute force.",
     aiProfiles: ["stable", "hunter", "bully"],
     parTime: 103,
     goals: [
@@ -283,7 +283,7 @@ export const EVENT_TEMPLATES = [
     seed: 4410,
     biomeId: "industrial",
     modifierIds: ["dense-traffic", "extra-pulse"],
-    summary: "Disruption sprint with pack traffic and brutal passing windows.",
+    summary: "Pack traffic and brutal passing windows.",
     aiProfiles: ["hunter", "bully"],
     parTime: 91,
     goals: [
@@ -301,7 +301,7 @@ export const EVENT_TEMPLATES = [
     seed: 5723,
     biomeId: "freeway",
     modifierIds: ["extra-pulse", "shield-drops"],
-    summary: "Outer-ring circuit where shockwave timing beats raw throttle.",
+    summary: "Shockwave timing beats raw throttle.",
     aiProfiles: ["stable", "hunter"],
     parTime: 99,
     goals: [
@@ -319,7 +319,7 @@ export const EVENT_TEMPLATES = [
     seed: 6991,
     biomeId: "void",
     modifierIds: ["fragile-barriers", "high-damage-hazards", "rival-pressure"],
-    summary: "High-chaos route rewarding clean exits and violent overtakes.",
+    summary: "High-chaos sprint built for violent overtakes.",
     aiProfiles: ["hunter", "bully"],
     parTime: 96,
     goals: [
@@ -341,7 +341,7 @@ export function createDailyEvent(date = new Date()) {
     seed: dailySeed,
     biomeId: ["industrial", "freeway", "void"][dailySeed % 3],
     modifierIds: dailySeed % 3 === 0 ? ["dense-pickups", "shield-drops"] : ["high-damage-hazards", "extra-pulse"],
-    summary: "Fresh seeded gauntlet built for one hard run and one better rerun.",
+    summary: "Fresh seeded gauntlet. Set a time, then cut it.",
     aiProfiles: ["stable", "hunter", "bully"],
     parTime: 98,
     goals: [

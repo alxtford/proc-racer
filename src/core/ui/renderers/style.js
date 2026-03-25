@@ -16,7 +16,7 @@ function renderStyleItemCard(item, activeSlot, options = {}) {
       ${renderCosmeticPreview(item, activeSlot)}
       <div class="card-head">
         <div class="card-title">${item.name}</div>
-        <div class="card-kicker">${item.previewing ? "Preview live" : item.selected ? "Equipped" : item.owned ? "Owned" : "Shop"}</div>
+        <div class="card-kicker">${item.previewing ? "Preview" : item.selected ? "Equipped" : item.owned ? "Owned" : "Shop"}</div>
       </div>
       <div class="card-meta">${item.description}</div>
       <div class="mini-tags">
@@ -34,13 +34,13 @@ export function renderStylePreviewCards(model, options = {}) {
   return `
     <div class="garage-item style-live-card">
       ${renderStyleLivePreview(model.preview.style, model.activeSlot, model.preview.item)}
-      <div class="section-label">Live preview</div>
+      <div class="section-label">Preview</div>
       <div class="profile-value">${model.preview.item?.name || "None"}</div>
       <div class="profile-note">${model.preview.statusCopy}</div>
       <div class="mini-tags">
         <span class="mini-tag">${model.preview.sourceLabel}</span>
         <span class="mini-tag">${model.preview.carName}</span>
-        <span class="mini-tag">${model.preview.owned ? "Owned or starter" : `${model.preview.item?.cost || 0} Scrap`}</span>
+        <span class="mini-tag">${model.preview.owned ? "Owned" : `${model.preview.item?.cost || 0} Scrap`}</span>
       </div>
     </div>
     ${includeEquipped ? `
@@ -48,9 +48,9 @@ export function renderStylePreviewCards(model, options = {}) {
         ${renderCosmeticPreview(model.equippedItem, model.activeSlot)}
         <div class="section-label">${model.activeSlot} loadout</div>
         <div class="profile-value">${model.equippedItem?.name || "None"}</div>
-        <div class="profile-note">${model.equippedItem?.description || "No cosmetic equipped for this slot."}</div>
+        <div class="profile-note">${model.equippedItem?.description || "Nothing equipped in this slot."}</div>
         <div class="mini-tags">
-          <span class="mini-tag">${isStarterCosmetic(model.equippedItem) ? "Starter issue" : "Locker owned"}</span>
+          <span class="mini-tag">${isStarterCosmetic(model.equippedItem) ? "Starter" : "Owned"}</span>
           <span class="mini-tag">Equipped</span>
           <span class="mini-tag">${model.slotCount} options</span>
         </div>
@@ -65,7 +65,7 @@ function renderStyleLoadout(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Style Locker</div>
-          ${renderInfoButton("style-info-btn", "Style help", "Scrap buys cosmetics only. The locker previews the live loadout while keeping the shop in a separate view.")}
+          ${renderInfoButton("style-info-btn", "Style help", "Spend Scrap on cosmetics. Preview before you buy or equip.")}
         </div>
         <div id="scrap-currency" class="section-note">${model.scrap} Scrap</div>
       </div>
@@ -87,7 +87,7 @@ function renderCompactStyleShop(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Style Shop</div>
-          ${renderInfoButton("style-info-btn", "Style help", "Scrap buys cosmetics only. Keep the live preview and the current buy or equip decision in one compact shelf when height is tight.")}
+          ${renderInfoButton("style-info-btn", "Style help", "Spend Scrap on cosmetics. Preview before you buy or equip.")}
         </div>
         <div id="scrap-currency" class="section-note">${model.scrap} Scrap</div>
       </div>
@@ -110,7 +110,7 @@ function renderCompactStyleShop(model) {
             </div>
           </div>
           <div class="style-card-grid style-card-grid-compact">
-            ${item ? renderStyleItemCard(item, model.activeSlot, { compact: true }) : '<div class="focus-copy">No cosmetics in this slot yet.</div>'}
+            ${item ? renderStyleItemCard(item, model.activeSlot, { compact: true }) : '<div class="focus-copy">No cosmetics here yet.</div>'}
           </div>
         </div>
       </div>
@@ -124,7 +124,7 @@ function renderStyleShop(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Style Shop</div>
-          ${renderInfoButton("style-info-btn", "Style help", "Scrap buys cosmetics only. Keep the live loadout and shopping grid together so the locker stays readable while you preview purchases.")}
+          ${renderInfoButton("style-info-btn", "Style help", "Spend Scrap on cosmetics. Preview before you buy or equip.")}
         </div>
         <div id="scrap-currency" class="section-note">${model.scrap} Scrap</div>
       </div>

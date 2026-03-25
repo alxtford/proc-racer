@@ -103,22 +103,22 @@ export function buildRaceModel(state, route) {
     customSeedApplyLabel: savedCustomSeed !== null ? "Update Seed" : "Lock Seed",
     customSeedClearDisabled: savedCustomSeed === null,
     customSeedNote: !baseEvent
-      ? "Select an event to pin a replay seed."
+      ? "Select a run to lock a replay seed."
       : !supportsCustomCourseSeed(baseEvent)
-        ? "Daily gauntlets stay locked to today's seed."
+        ? "Daily gauntlet seed is locked today."
         : savedCustomSeed === null
-          ? "Pin a favourite seed to keep replaying the same line after the board shifts."
+          ? "Lock a favourite seed for this run."
           : event?.customSeedMatchesBoard
-            ? "Replay seed locked. This line currently matches the live board."
-            : "Replay seed locked. PBs and ghosts now track this favourite line separately.",
+            ? "Replay seed locked."
+            : "Replay seed locked. PBs and ghosts track it separately.",
     hero: event ? {
       title: event.name,
       badge: getEventBadge(state, event),
-      meta: `${getEventParLabel(event)} // ${formatCourseSeed(event.seed)} // Goal: ${getPrimaryGoal(event).toLowerCase()}`,
+      meta: `${getEventParLabel(event)} // ${formatCourseSeed(event.seed)} // ${getPrimaryGoal(event)}`,
       copy: getEventReason(state, event, eventResult),
       tags: getFocusTags(state, event, eventResult),
-      ghostStatus: getGhostReady(state, event) ? "Ghost ready" : "Ghost cold",
-      utilityStatus: event.customSeed ? "Replay seed pinned" : getEventUtilityStatus(state, event),
+      ghostStatus: getGhostReady(state, event) ? "Ghost ready" : "No ghost",
+      utilityStatus: event.customSeed ? "Seed locked" : getEventUtilityStatus(state, event),
       nextCopy: getHeroNextCopy(state, event),
       recoveryCopy: getHeroRecoveryCopy(state),
       replayCopy: getReplayHook(state, event),

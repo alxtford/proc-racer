@@ -6,7 +6,7 @@ function renderGarageHero(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Selected Car</div>
-          ${renderInfoButton("car-info-btn", "Car help", "The selected chassis anchors your next launch, with slot pressure, Foundry access, and the broader player hub all hanging off this lineup view.")}
+          ${renderInfoButton("car-info-btn", "Car help", "Pick the car you want to launch next.")}
         </div>
         <div id="car-focus-badge" class="section-note">${model.hero?.badge || "No car selected"}</div>
       </div>
@@ -17,7 +17,7 @@ function renderGarageHero(model) {
         <div class="garage-hero-copy">
           <div id="car-focus-role" class="focus-meta">${model.hero?.role || ""}</div>
           <div id="car-focus-title" class="focus-title">${model.hero?.title || "No car selected"}</div>
-          <div id="car-focus-copy" class="focus-copy">${model.hero?.copy || "Keep a car selected to launch straight from Race."}</div>
+          <div id="car-focus-copy" class="focus-copy">${model.hero?.copy || "Select a car to launch."}</div>
           <div id="car-focus-tags" class="focus-tags">${(model.hero?.tags || []).map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
         </div>
         <div id="car-focus-stats" class="stat-bars garage-focus-stats">${model.hero?.statsHtml || ""}</div>
@@ -59,7 +59,6 @@ function renderGarageSnapshot(model) {
     <section class="selection-block workspace-career-strip">
       <div class="section-head">
         <div class="section-label">Lineup Snapshot</div>
-        <div class="section-note">Pressure at a glance</div>
       </div>
       <div id="profile-summary" class="profile-grid profile-grid-compact">${renderSummaryGrid(model.summary)}</div>
     </section>

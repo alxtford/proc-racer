@@ -14,7 +14,7 @@ export function buildFoundryModel(state) {
     selectedCar,
     flux: getCurrencyBalance(state.save, "flux"),
     rollReady: getRollReadyStatus(state.save),
-    machineTitle: compactLandscape ? "Crack 3 Cars" : "Crack 3 Procedural Cars",
+    machineTitle: "Crack 3 Cars",
     rollLabel: compactLandscape ? `Roll ${GARAGE_ROLL_COST} Flux` : `Roll 3 Cars // ${GARAGE_ROLL_COST} Flux`,
     rollDisabled: Boolean(state.garageRoll) || getCurrencyBalance(state.save, "flux") < GARAGE_ROLL_COST,
     rollCopy: getRollCallout(state),
@@ -24,7 +24,7 @@ export function buildFoundryModel(state) {
       value: isGarageSlotFilled(car) ? car.name : "Open slot",
       note: isGarageSlotFilled(car)
         ? `${car.tierLabel} // Rating ${getGarageScore(car)} // ${car.role}`
-        : "Vacant // keep a Foundry roll here",
+        : "Open slot // fill from Foundry",
     })),
   };
 }

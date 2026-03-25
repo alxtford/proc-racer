@@ -18,7 +18,7 @@ export function buildSettingsModel(state) {
       {
         label: "Audio profile",
         value: muted ? "Muted" : `${masterVolume}% master`,
-        note: muted ? "Silence engaged for the current shell." : "Master volume stays live across menu and race.",
+        note: muted ? "Audio muted." : "Live across menu and race.",
       },
       {
         label: "Assist profile",

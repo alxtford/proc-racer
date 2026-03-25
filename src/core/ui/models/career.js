@@ -27,9 +27,9 @@ function countRunsMatching(runs, predicate) {
 }
 
 function formatTrendNote(current, previous, formatter, fasterIsBetter = false) {
-  if (current === null) return "No completed runs logged yet.";
-  if (previous === null) return "Need 10 logged runs to compare momentum.";
-  if (Math.abs(current - previous) < 0.01) return "Holding steady against the previous five.";
+  if (current === null) return "No runs logged yet.";
+  if (previous === null) return "Need 10 runs to compare.";
+  if (Math.abs(current - previous) < 0.01) return "Level with the previous five.";
   const improved = fasterIsBetter ? current < previous : current > previous;
   const delta = formatter(Math.abs(current - previous));
   return improved
@@ -56,29 +56,29 @@ function buildTrendSummary(state) {
       label: "Pressure Log",
       value: history.length ? `${history.length} runs` : "No runs",
       note: history.length
-        ? `${totalPodiums} podiums, ${totalWins} wins. Latest: ${latestRun ? getRunHistoryEventName(state, latestRun) : "Unknown route"}.`
-        : "Finish any event to start building the pressure log.",
+        ? `${totalPodiums} podiums, ${totalWins} wins. Latest ${latestRun ? getRunHistoryEventName(state, latestRun) : "Unknown route"}.`
+        : "Finish a run to start the log.",
     },
     {
       label: "Pace Window",
       value: paceAverage !== null ? formatTime(paceAverage) : "--",
       note: paceAverage !== null
         ? `Last five average. ${formatTrendNote(paceAverage, previousPaceAverage, formatGain, true)}`
-        : "Log finishes to compare current pace against older runs.",
+        : "Finish runs to track pace.",
     },
     {
       label: "Wreck Rate",
       value: wreckAverage !== null ? `${wreckAverage.toFixed(wreckAverage >= 10 ? 0 : 1)} / run` : "--",
       note: wreckAverage !== null
         ? `Last five average. ${formatTrendNote(wreckAverage, previousWreckAverage, (value) => `${value.toFixed(value >= 10 ? 0 : 1)} wrecks`, true)}`
-        : "Take a few runs to see whether the field is chewing the chassis up.",
+        : "Finish runs to track wrecks.",
     },
     {
       label: "Flux Flow",
       value: fluxAverage !== null ? `+${Math.round(fluxAverage)} / run` : "--",
       note: fluxAverage !== null
         ? `Last five average. ${formatTrendNote(fluxAverage, previousFluxAverage, (value) => `${Math.round(value)} Flux`)}`
-        : "Reward flow appears once the pressure log has completed runs.",
+        : "Finish runs to track rewards.",
     },
   ];
 }
@@ -90,17 +90,17 @@ function buildRunHistory(state) {
       {
         kind: "fallback",
         title: "Daily killline",
-        detail: state.save.daily.bestTime ? `Beat ${formatTime(state.save.daily.bestTime)}` : "Plant the first gauntlet time.",
+        detail: state.save.daily.bestTime ? `Beat ${formatTime(state.save.daily.bestTime)}` : "Set the first daily time.",
       },
       {
         kind: "fallback",
         title: "Foundry target",
-        detail: `${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to the next pull.`,
+        detail: `${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to the next roll.`,
       },
       {
         kind: "fallback",
         title: "First pressure log",
-        detail: "Finish any run to bank pace, wreck, and reward trends here.",
+        detail: "Finish a run to start the log.",
       },
     ];
   }
@@ -128,7 +128,7 @@ export function buildCareerModel(state) {
   return {
     type: "career",
     summary: buildTrendSummary(state),
-    historyCountLabel: history.length ? `${history.length} logged` : "Waiting for first finish",
+    historyCountLabel: history.length ? `${history.length} logged` : "First finish pending",
     runHistory: buildRunHistory(state),
   };
 }

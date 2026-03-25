@@ -443,19 +443,18 @@ function renderCosmeticPreview(item, slotOverride = item?.slot) {
 }
 
 function getStylePreviewSourceLabel(previewItem, activeItem, owned) {
-  if (!previewItem || previewItem.id === activeItem?.id) return "Current loadout";
-  return owned ? "Locker preview" : "Shop preview";
+  if (!previewItem || previewItem.id === activeItem?.id) return "Current";
+  return owned ? "Locker" : "Shop";
 }
 
 function getStylePreviewStatusCopy(slot, previewItem, activeItem, selectedCar) {
   const carName = selectedCar?.name || "active car";
   if (!previewItem || previewItem.id === activeItem?.id) {
-    return `Current ${slot} loadout on ${carName}.`;
+    return `Live on ${carName}.`;
   }
-  if (slot === "emote") {
-    return `Results stinger preview for ${carName} before you commit.`;
-  }
-  return `Previewing ${previewItem.name} on ${carName} before you buy or equip.`;
+  return slot === "emote"
+    ? `Previewing ${previewItem.name} for ${carName}.`
+    : `Previewing ${previewItem.name} on ${carName}.`;
 }
 
 function renderStyleLivePreview(style, slot, previewItem) {
@@ -583,15 +582,15 @@ function getSelectedGarageCar(state) {
 
 function getEventReason(state, event, eventResult) {
   if (event.guided && !state.save.settings.tutorialCompleted) {
-    return clampCopy("Fastest route into pickups, hits, and momentum carry.");
+    return clampCopy("Pickups, hits, and pace in one short run.");
   }
   if (event.daily) {
     return clampCopy(state.save.daily.bestTime
-      ? `Today's fixed gauntlet. Best ${formatTime(state.save.daily.bestTime)} is live.`
-      : "Today's fixed gauntlet. One hard run plants the first time.");
+      ? `Today's fixed gauntlet. Best ${formatTime(state.save.daily.bestTime)}.`
+      : "Today's fixed gauntlet. Set the first time.");
   }
-  if (!eventResult) return clampCopy(`${event.summary} Fresh line. No banked best yet.`);
-  return clampCopy(`${event.summary} Best ${formatTime(eventResult.bestTime)} with ${eventResult.goalsMet}/${event.goals.length} goals.`);
+  if (!eventResult) return clampCopy(`${event.summary} No best set.`);
+  return clampCopy(`${event.summary} Best ${formatTime(eventResult.bestTime)}.`);
 }
 
 function getCareerStatus(state) {
@@ -607,7 +606,7 @@ function getDailyStatus(state) {
   const dailyMedal = getStoredMedal(dailyResult);
   return state.save.daily.bestTime
     ? `Killline ${formatTime(state.save.daily.bestTime)} // ${dailyMedal || "live"}`
-    : "Today's killline is fresh";
+    : "Daily killline fresh";
 }
 
 function getGhostStatus(state) {
@@ -621,15 +620,15 @@ function getGhostStatus(state) {
 function getReplayHook(state, event) {
   if (event.daily) {
     return state.save.daily.bestTime
-      ? "Shave the killline best, then hunt a meaner medal line."
-      : "Plant the first killline time, then come back swinging.";
+      ? "Beat the daily best."
+      : "Set the daily mark.";
   }
   const eventResult = getEventResult(state, event);
   const medal = getStoredMedal(eventResult);
-  if (!eventResult) return "Fresh run. Bank a first best, then start attacking goals.";
-  if (medal !== "Gold") return `${medal} is banked. Push for ${getNextMedal(medal)} and a cleaner line.`;
-  if (getGhostReady(state, event)) return "Gold is banked. Run your ghost down and cut deeper.";
-  return `Best ${formatTime(eventResult.bestTime)} is live. Beat it or reroll a new one-shot event.`;
+  if (!eventResult) return "Set a first best.";
+  if (medal !== "Gold") return `${medal} banked. Push for ${getNextMedal(medal)}.`;
+  if (getGhostReady(state, event)) return "Gold banked. Hunt the ghost.";
+  return `Best ${formatTime(eventResult.bestTime)} is live. Beat it or remix.`;
 }
 
 function getFocusTags(state, event, eventResult) {
@@ -650,9 +649,9 @@ function getMenuEyebrow(state, event) {
 }
 
 function getMenuIntro(state, event) {
-  if (!state.save.settings.tutorialCompleted) return clampHeaderCopy("Take the guided opener, then move into harder kill-runs.");
-  if (event.daily) return clampHeaderCopy("Today's gauntlet is live. Bank a time, then cut deeper.");
-  return clampHeaderCopy("Pick a run and launch in seconds.");
+  if (!state.save.settings.tutorialCompleted) return clampHeaderCopy("Take the guided run, then hit the board.");
+  if (event.daily) return clampHeaderCopy("Today's gauntlet is live.");
+  return clampHeaderCopy("Pick a run and launch.");
 }
 
 function getLaunchHint(state) {
@@ -677,21 +676,21 @@ function getQuickLabel(state) {
 
 function getHeroNextCopy(state, event) {
   if (!state.save.settings.tutorialCompleted && !event.guided) {
-    return clampCopy("Breakline Trial is still the fastest way to learn pickups and survive the pressure.");
+    return clampCopy("Start with Breakline Trial.");
   }
-  return clampCopy(`${event.name} is a ${getDifficultyLabel(event).toLowerCase()} ${event.type === "circuit" ? "circuit" : "sprint"} built around ${getPrimaryGoal(event).toLowerCase()}.`);
+  return clampCopy(`${getDifficultyLabel(event)} ${event.type === "circuit" ? "circuit" : "sprint"}. Goal: ${getPrimaryGoal(event).toLowerCase()}.`);
 }
 
 function getHeroRecoveryCopy(state) {
   return state.save.settings.tutorialCompleted
-    ? clampCopy("Hits should tear pace and bodywork away before they kill the run.")
-    : clampCopy("The opener shows how impacts, shields, and pickups keep the race violent.");
+    ? clampCopy("Hits should cost pace before they end the run.")
+    : clampCopy("The opener teaches hits, shields, and pickups.");
 }
 
 function getHeroDailyCopy(state) {
   return state.save.daily.bestTime
-    ? clampCopy(`Today's gauntlet best is ${formatTime(state.save.daily.bestTime)}.`)
-    : clampCopy("Today's gauntlet is the cleanest reason to come back swinging.");
+    ? clampCopy(`Daily best ${formatTime(state.save.daily.bestTime)}.`)
+    : clampCopy("Daily board is fresh.");
 }
 
 function getCarLabel(car) {
@@ -705,41 +704,38 @@ function getCarTags(car) {
 }
 
 function getCarGuidance(car) {
-  if (!isGarageSlotFilled(car)) return clampCopy("Open slot. Keep a Foundry roll here to expand the garage.");
+  if (!isGarageSlotFilled(car)) return clampCopy("Open slot for a Foundry pull.");
   return clampCopy(car.guidance || car.description || "Race ready.");
 }
 
 function getMenuOverviewTooltip(state, event) {
   if (state.menuView === "profile") {
-    return "Garage keeps three live cars only, so every foundry pull matters.\n\nUse Garage to compare your active slot cars, Foundry to roll three new procedural offers, Style to spend Scrap, and Career to review momentum.\n\nThe goal is simple: keep only meaningful upgrades and sell the misses into cosmetic progress.";
+    return "Three garage slots only. Keep the upgrades and scrap the misses.";
   }
   if (state.menuView === "settings") {
-    return "Settings are split into two short surfaces so comfort and controls stay readable on one screen.\n\nComfort covers audio, contrast, shake, and assist level. Controls covers binding mode, remaps, and live device state.\n\nEverything updates immediately and persists between sessions.";
+    return "Comfort covers audio, contrast, shake, and assist. Controls covers bindings and device state.";
   }
   const currentRun = event.daily
-    ? "Daily Gauntlet uses the same seeded course all day, so the value comes from shaving time and carving a harder line."
-    : `${event.name} is currently selected. ${getReplayHook(state, event)}`;
-  const recommendedPath = !state.save.settings.tutorialCompleted
-    ? "Recommended path: take Guided Run first, then move into Daily Gauntlet or Instant Remix once the pickup loop makes sense."
-    : "Use Hit This Run for the selected event, Daily Gauntlet for the fixed seed, and Instant Remix when you want a fresh one-shot race immediately.";
-  return `${getMenuIntro(state, event)}\n\n${currentRun}\n\n${recommendedPath}\n\n${getLaunchHint(state)}`;
+    ? "Daily Gauntlet uses one fixed seed all day."
+    : `${event.name}. ${getReplayHook(state, event)}`;
+  return `${getMenuIntro(state, event)}\n\n${currentRun}\n\n${getLaunchHint(state)}`;
 }
 
 function getEventTooltip(state, event, eventResult) {
   const formatLabel = event.type === "circuit" ? `${event.laps} lap circuit` : "Point-to-point sprint";
   const progressCopy = event.daily
     ? state.save.daily.bestTime
-      ? `Gauntlet best on record: ${formatTime(state.save.daily.bestTime)}.`
-      : "No gauntlet time banked yet."
+      ? `Best ${formatTime(state.save.daily.bestTime)}.`
+      : "No daily time banked."
     : eventResult?.bestTime
-      ? `Best result on record: ${formatTime(eventResult.bestTime)} with ${eventResult.goalsMet}/${event.goals.length} goals cleared.`
-      : "Fresh run with no saved best yet.";
-  return `${event.name}\n${formatLabel} // ${getDifficultyLabel(event)} // ${BIOME_DEFS[event.biomeId].name}\n\n${event.summary}\n\nPrimary goal: ${getPrimaryGoal(event)}.\n${progressCopy}`;
+      ? `Best ${formatTime(eventResult.bestTime)} // ${eventResult.goalsMet}/${event.goals.length} goals.`
+      : "No saved best yet.";
+  return `${event.name}\n${formatLabel} // ${getDifficultyLabel(event)} // ${BIOME_DEFS[event.biomeId].name}\n\n${event.summary}\n\nGoal: ${getPrimaryGoal(event)}.\n${progressCopy}`;
 }
 
 function getCarTooltip(car) {
   if (!isGarageSlotFilled(car)) {
-    return "Open Slot\n\nThis garage bay is empty. Keep a Foundry roll here to turn it into a live race slot.";
+    return "Open Slot\n\nEmpty bay. Fill it from the Foundry.";
   }
   const stats = [
     `Launch ${describeStat(Math.round(getGarageStatPercent(car, "accel")))}`,
@@ -939,7 +935,7 @@ function getMenuHeaderContent(state, view, event) {
 }
 
 function formatCarMeta(car) {
-  if (!isGarageSlotFilled(car)) return "Vacant // Rating 0 // Foundry slot";
+  if (!isGarageSlotFilled(car)) return "Open slot // Rating 0 // Empty bay";
   return `${car.tierLabel} // Rating ${getGarageScore(car)} // ${car.role}`;
 }
 
@@ -949,10 +945,10 @@ function getRollCallout(state) {
   const openSlots = state.save.garage.filter((car) => !isGarageSlotFilled(car)).length;
   if (flux >= GARAGE_ROLL_COST) {
     return openSlots
-      ? clampCopy(`Foundry hot. ${openSlots} open slot${openSlots === 1 ? "" : "s"} can be filled immediately.`)
-      : clampCopy("Foundry hot. Crack three cars. Better race history raises the ceiling.");
+      ? clampCopy(`Foundry hot. ${openSlots} open slot${openSlots === 1 ? "" : "s"}.`)
+      : clampCopy("Foundry hot. Roll three cars.");
   }
-  return clampCopy(`Calibration ${progression}%. Earn ${GARAGE_ROLL_COST - flux} more Flux to spin again.`);
+  return clampCopy(`Calibration ${progression}%. Need ${GARAGE_ROLL_COST - flux} Flux for the next roll.`);
 }
 
 function getCosmeticItem(itemId) {
@@ -960,9 +956,9 @@ function getCosmeticItem(itemId) {
 }
 
 function getEventUtilityStatus(state, event) {
-  if (event.daily) return "Bonus Flux live";
+  if (event.daily) return "Daily live";
   if (getRollReadyStatus(state.save)) return "Foundry ready";
-  return event.modifierIds.includes("rival-pressure") ? "Rival heat live" : `${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to next pull`;
+  return event.modifierIds.includes("rival-pressure") ? "Rival heat" : `${Math.max(0, GARAGE_ROLL_COST - getCurrencyBalance(state.save, "flux"))} Flux to roll`;
 }
 
 function getBoardRerollLabel(state) {
@@ -976,12 +972,12 @@ function getBoardRerollTooltip(state) {
   const rerolls = state.save.strikeBoard?.rerolls || 0;
   const liveSeed = state.save.strikeBoard?.seed || 0;
   const availability = flux >= COURSE_REROLL_COST
-    ? `You can crack a fresh strike board right now for ${COURSE_REROLL_COST} Flux.`
-    : `Need ${COURSE_REROLL_COST - flux} more Flux to reforge the strike board.`;
+    ? `Reforge the board now for ${COURSE_REROLL_COST} Flux.`
+    : `Need ${COURSE_REROLL_COST - flux} more Flux to reforge the board.`;
   const archiveCopy = rerolls
-    ? `Current board seed ${String(liveSeed).slice(-6)}. ${rerolls} paid reforge${rerolls === 1 ? "" : "s"} banked on this save.`
-    : "This save is still on the stock strike board. Reforging replaces the current non-daily courses.";
-  return `${availability}\n\nReforging only replaces the strike-board courses. Guided Run and Daily Killline stay intact.\n\n${archiveCopy}`;
+    ? `Board seed ${String(liveSeed).slice(-6)}. ${rerolls} paid reforge${rerolls === 1 ? "" : "s"} used.`
+    : "Still on the stock board. Reforge swaps the non-daily runs.";
+  return `${availability}\n\nGuided Run and Daily Killline stay intact.\n\n${archiveCopy}`;
 }
 
 function drawTrackPreview(canvas, event) {
@@ -1705,8 +1701,8 @@ export function createUi(state, callbacks = {}) {
       .reduce((sum, offer) => sum + getScrapValue(offer), 0);
     const assignedCount = roll.keptSlots.filter((slotIndex) => Number.isInteger(roll.assignments?.[slotIndex])).length;
     refs.garageRollSummary.textContent = roll.status === "revealed"
-      ? `Keep the machines worth a slot, then assign each one. Unkept rides sell for ${scrapPreview} Scrap.`
-      : "The Foundry is cracking three procedural cars.";
+      ? `Keep what earns a slot. Scrap preview ${scrapPreview} Scrap.`
+      : "Rolling three cars.";
     refs.garageRollConfirmBtn.disabled = roll.status !== "revealed" || !roll.keptSlots.length || assignedCount !== roll.keptSlots.length;
     refs.garageRollConfirmBtn.textContent = roll.status !== "revealed"
       ? "Revealing..."
@@ -1786,12 +1782,12 @@ export function createUi(state, callbacks = {}) {
     }
     if (refs.eventCustomSeedNote) {
       refs.eventCustomSeedNote.textContent = !customSeedEnabled
-        ? "Daily gauntlets stay locked to today's seed."
+        ? "Daily gauntlet seed is locked today."
         : savedCustomSeed === null
-          ? "Enter a favourite seed to replay this layout exactly. PBs and ghosts will track that line separately when it diverges from the live board."
+          ? "Lock a favourite seed for this run."
           : event.customSeedMatchesBoard
-            ? "Replay seed locked. This one matches the live board now and will stay playable after the board shifts."
-            : "Replay seed locked. This favourite line now runs on its own seed-scoped PB and ghost lane.";
+            ? "Replay seed locked."
+            : "Replay seed locked. PBs and ghosts track it separately.";
     }
     const boardPage = getHomeBoardPage(displayedEvents, baseEvent);
     if (refs.homeBoardPage) {
@@ -1916,18 +1912,18 @@ export function createUi(state, callbacks = {}) {
     renderGarageRoll();
     renderBindings();
 
-    if (refs.splashOverviewInfo) refs.splashOverviewInfo.dataset.tooltip = "Built for short, violent runs: seeded kill-courses, glowing wrecks, and a Foundry that keeps feeding new metal into the garage.";
-    if (refs.splashRunsInfo) refs.splashRunsInfo.dataset.tooltip = "Every event is seeded. Circuits and sprints reshuffle layout, hazards, and pickup pockets so the next line is never identical.";
-    if (refs.splashRecoveryInfo) refs.splashRecoveryInfo.dataset.tooltip = "Impacts peel parts off the shell, chew through integrity, and turn a bad line into smoking scrap. The goal is drama first, not fragility.";
-    if (refs.splashReplayInfo) refs.splashReplayInfo.dataset.tooltip = "Daily gauntlets, medal pushes, ghosts, and Foundry rolls keep the next run worth taking.";
+    if (refs.splashOverviewInfo) refs.splashOverviewInfo.dataset.tooltip = "Short, violent seeded runs. Wreck, earn Flux, build the garage.";
+    if (refs.splashRunsInfo) refs.splashRunsInfo.dataset.tooltip = "Circuits and sprints are seeded, so the next line is never quite the same.";
+    if (refs.splashRecoveryInfo) refs.splashRecoveryInfo.dataset.tooltip = "Hits cost pace and integrity before they kill the run.";
+    if (refs.splashReplayInfo) refs.splashReplayInfo.dataset.tooltip = "Daily runs, ghosts, medals, and Foundry rolls keep the board worth replaying.";
     if (refs.menuOverviewInfo) refs.menuOverviewInfo.dataset.tooltip = getMenuOverviewTooltip(state, event);
     if (refs.eventInfoBtn) refs.eventInfoBtn.dataset.tooltip = getEventTooltip(state, event, eventResult);
     if (refs.boardRerollInfoBtn) refs.boardRerollInfoBtn.dataset.tooltip = getBoardRerollTooltip(state);
-    if (refs.carInfoBtn) refs.carInfoBtn.dataset.tooltip = car ? getCarTooltip(car) : "Garage data is still loading.";
-    if (refs.gachaInfoBtn) refs.gachaInfoBtn.dataset.tooltip = "Flux buys three procedural car rolls at once. Better race history improves the tier pool, but every pull can still miss. Keep any number of reveals, choose which slot each one replaces, and sell the rest automatically for Scrap.";
-    if (refs.styleInfoBtn) refs.styleInfoBtn.dataset.tooltip = "Scrap comes from cars you do not keep. Spend it here on skins, trails, tyre marks, and results emotes. The purchase path is isolated so direct premium buys can slot in later without rebuilding the garage flow.";
-    if (refs.settingsAudioInfo) refs.settingsAudioInfo.dataset.tooltip = "These settings update live. Use volume and mute for quick comfort, reduced shake to calm collisions, high contrast for clearer track reads, and assist level to soften punishment after mistakes.";
-    if (refs.settingsControlsInfo) refs.settingsControlsInfo.dataset.tooltip = "Hybrid mode keeps the default keyboard layout and any live gamepad. Custom mode lets you remap race inputs. Bindings update immediately and persist between sessions.";
+    if (refs.carInfoBtn) refs.carInfoBtn.dataset.tooltip = car ? getCarTooltip(car) : "Garage loading.";
+    if (refs.gachaInfoBtn) refs.gachaInfoBtn.dataset.tooltip = "Roll three cars. Keep what earns a slot and scrap the rest.";
+    if (refs.styleInfoBtn) refs.styleInfoBtn.dataset.tooltip = "Spend Scrap on skins, trails, tyre marks, and emotes.";
+    if (refs.settingsAudioInfo) refs.settingsAudioInfo.dataset.tooltip = "Audio, visibility, and assist update live.";
+    if (refs.settingsControlsInfo) refs.settingsControlsInfo.dataset.tooltip = "Hybrid uses the default layout and gamepad support. Custom lets you remap.";
 
     if (uiState.tooltipButton && !refs.tooltip.classList.contains("hidden")) {
       showTooltip(uiState.tooltipButton, uiState.tooltipMode || "click");

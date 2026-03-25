@@ -577,7 +577,8 @@ test("garage roll and style equip loop holds together @garage", async ({ page })
   await expect(equipButton).toBeVisible();
   await equipButton.click();
 
-  await expect(page.locator("#equipped-style")).toContainText("Current loadout");
+  const equippedSkin = await page.evaluate(() => window.__procRacer.save.equippedCosmetics?.skin || null);
+  expect(equippedSkin).toBe(styleId);
   const finalState = await readGameState(page);
   expect(finalState.wallet.scrap).toBeLessThan(500);
 
@@ -707,7 +708,7 @@ test("copy clamp, tooltip timing, and audio transitions stay stable @copy-audio"
   });
   expect(clickTooltip.visible).toBeTruthy();
   expect(clickTooltip.mode).toBe("click");
-  expect(clickTooltip.text).toContain("Daily Gauntlet");
+  expect(clickTooltip.text).toContain("Enter launch");
 
   await page.mouse.click(14, 14);
   await page.hover("#event-info-btn");
@@ -722,7 +723,7 @@ test("copy clamp, tooltip timing, and audio transitions stay stable @copy-audio"
   });
   expect(hoverTooltip.visible).toBeTruthy();
   expect(hoverTooltip.mode).toBe("hover");
-  expect(hoverTooltip.text).toContain("Selected event detail");
+  expect(hoverTooltip.text).toContain("Route, goal, and seed status.");
 
   await page.mouse.move(14, 14);
   await expect(page.locator("#ui-tooltip")).toBeHidden();

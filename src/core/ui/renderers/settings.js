@@ -7,9 +7,8 @@ function renderSettingsComfort(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Comfort + Audio</div>
-          ${renderInfoButton("settings-audio-info", "Audio and comfort help", "Volume, visibility, shake, and assist all update live. Keep comfort tuning visible without another subtab.")}
+          ${renderInfoButton("settings-audio-info", "Audio and comfort help", "Audio, visibility, and assist update live.")}
         </div>
-        <div class="section-note">Live updates</div>
       </div>
       <div class="settings-split workspace-settings-grid">
         <div class="settings-subcard">
@@ -66,13 +65,13 @@ function renderSettingsControls(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Controls + Devices</div>
-          ${renderInfoButton("settings-controls-info", "Controls help", "Hybrid keeps the default keyboard layout and live gamepad support. Custom mode lets you remap race inputs immediately.")}
+          ${renderInfoButton("settings-controls-info", "Controls help", "Hybrid uses the default layout and gamepad support. Custom lets you remap.")}
         </div>
         <div id="bind-status" class="section-note">${model.bindStatus}</div>
       </div>
       <div class="settings-split settings-split-controls workspace-settings-grid">
         <div class="settings-subcard">
-          <div class="section-label">Input Mode</div>
+          <div class="section-label">Input mode</div>
           <div class="settings-stack">
             <label class="settings-row">
               <span>Binding mode</span>

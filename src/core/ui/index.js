@@ -459,8 +459,8 @@ export function createUi(state, callbacks = {}) {
     const scrapPreview = roll.offers.filter((offer) => !roll.keptSlots.includes(offer.slotIndex)).reduce((sum, offer) => sum + getScrapValue(offer), 0);
     const assignedCount = roll.keptSlots.filter((slotIndex) => Number.isInteger(roll.assignments?.[slotIndex])).length;
     refs.garageRollSummary.textContent = roll.status === "revealed"
-      ? `Keep the machines worth a slot, then assign each one. Unkept rides sell for ${scrapPreview} Scrap.`
-      : "The Foundry is cracking three procedural cars.";
+      ? `Keep what earns a slot. Scrap preview ${scrapPreview} Scrap.`
+      : "Rolling three cars.";
     refs.garageRollConfirmBtn.disabled = roll.status !== "revealed" || !roll.keptSlots.length || assignedCount !== roll.keptSlots.length;
     refs.garageRollConfirmBtn.textContent = roll.status !== "revealed" ? "Revealing..." : `Keep ${roll.keptSlots.length} Car${roll.keptSlots.length === 1 ? "" : "s"}`;
   }

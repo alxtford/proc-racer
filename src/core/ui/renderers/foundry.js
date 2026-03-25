@@ -12,7 +12,7 @@ function renderFoundryForge(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Flux Foundry</div>
-          ${renderInfoButton("gacha-info-btn", "Foundry help", "Flux buys three procedural car reveals. Keep any subset, assign each one to a slot, and scrap the rest.")}
+          ${renderInfoButton("gacha-info-btn", "Foundry help", "Roll three cars. Keep what earns a slot and scrap the rest.")}
         </div>
         ${headActions}
       </div>
@@ -33,9 +33,9 @@ function renderFoundryForge(model) {
             <div class="focus-title">${model.machineTitle}</div>
             <div id="gacha-roll-copy" class="focus-copy">${model.rollCopy}</div>
             <div class="mini-tags">
-              <span class="mini-tag">3 capsules</span>
-              <span class="mini-tag">Replace any slot</span>
-              <span class="mini-tag">Unused cars scrap back</span>
+              <span class="mini-tag">3 cars</span>
+              <span class="mini-tag">Any slot</span>
+              <span class="mini-tag">Scrap the rest</span>
             </div>
           </div>
         </div>
@@ -49,7 +49,7 @@ function renderFoundryReadout(model) {
     <section class="selection-block workspace-foundry-insights">
       <div class="section-head">
         <div class="section-label">Foundry Readout</div>
-        <div id="profile-badge" class="section-note hero-note">${model.rollReady ? "Foundry ready" : "Build more Flux"}</div>
+        <div id="profile-badge" class="section-note hero-note">${model.rollReady ? "Ready" : "Need Flux"}</div>
       </div>
       <div id="foundry-insights" class="profile-grid profile-grid-compact foundry-insights">${renderSummaryGrid(model.insights)}</div>
     </section>
@@ -61,7 +61,6 @@ function renderFoundrySlots(model) {
     <section class="selection-block workspace-foundry-slots">
       <div class="section-head">
         <div class="section-label">Slot Pressure</div>
-        <div class="section-note">Replace only what earns it</div>
       </div>
       <div id="garage-slot-summary" class="results-list results-list-compact">
         ${model.slotSummary.map((item) => `

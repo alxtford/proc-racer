@@ -114,12 +114,12 @@ if (copyMetrics.renderedLength > 88) {
   process.exit(1);
 }
 
-if (!clickTooltip.visible || clickTooltip.mode !== "click" || !clickTooltip.text.includes("Daily Gauntlet")) {
+if (!clickTooltip.visible || clickTooltip.mode !== "click" || !clickTooltip.text.includes("Enter launch")) {
   console.error("Click tooltip did not open with the expected menu guidance.");
   process.exit(1);
 }
 
-if (!hoverTooltip.visible || hoverTooltip.mode !== "hover" || !hoverTooltip.text.includes("Primary goal")) {
+if (!hoverTooltip.visible || hoverTooltip.mode !== "hover" || !hoverTooltip.text.includes("Route, goal, and seed status.")) {
   console.error("Hover tooltip did not open after the required delay.");
   process.exit(1);
 }

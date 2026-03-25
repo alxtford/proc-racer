@@ -18,14 +18,14 @@ function renderRaceFocus(model, options = {}) {
             <div class="focus-title-row">
               <div id="event-focus-title" class="focus-title">${hero?.title || "No run selected"}</div>
             </div>
-            <div id="event-focus-meta" class="focus-meta">${hero?.meta || "Select an event to see the line."}</div>
-            <div id="event-focus-copy" class="focus-copy">${hero?.copy || "The next run is waiting."}</div>
+            <div id="event-focus-meta" class="focus-meta">${hero?.meta || "Select a run to see the route."}</div>
+            <div id="event-focus-copy" class="focus-copy">${hero?.copy || "Pick a run and launch."}</div>
           </div>
           <div class="workspace-race-status">
             <div id="event-focus-modifiers" class="focus-tags">${(hero?.tags || []).map((tag) => `<span class="tag">${tag}</span>`).join("")}</div>
             <div class="focus-inline-meta">
-              <span id="event-ghost-status" class="mini-tag">${hero?.ghostStatus || "Ghost cold"}</span>
-              <span id="event-reward-status" class="mini-tag">${hero?.utilityStatus || "Fresh reward line"}</span>
+              <span id="event-ghost-status" class="mini-tag">${hero?.ghostStatus || "No ghost"}</span>
+              <span id="event-reward-status" class="mini-tag">${hero?.utilityStatus || "Fresh board"}</span>
             </div>
           </div>
         </div>
@@ -52,11 +52,11 @@ function renderRaceToolsPanel(model, options = {}) {
   const showLaunchOverflow = Boolean(options.showLaunchOverflow);
   const utilityCopy = condensed
     ? (showLaunchOverflow
-      ? "Daily and remix stay here while the main launch line stays clean."
-      : "Reforge or pin a replay seed without leaving launch.")
+      ? "Daily, remix, and seed tools."
+      : "Reforge the board or lock a replay seed.")
     : (showLaunchOverflow
-      ? "Daily gauntlet and remix stay here while the main launch line stays clean."
-      : "Reroll the board or pin a replay seed without crowding the primary launch line.");
+      ? "Daily, remix, and seed tools."
+      : "Reforge the board or lock a replay seed.");
   const seedClearAction = !condensed || !model.customSeedClearDisabled
     ? `<button id="event-custom-seed-clear" class="secondary-btn section-action-btn" type="button" ${model.customSeedEnabled && !model.customSeedClearDisabled ? "" : "disabled"}>Clear</button>`
     : "";
@@ -65,17 +65,17 @@ function renderRaceToolsPanel(model, options = {}) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Course Tools</div>
-          ${renderInfoButton("board-reroll-info-btn", "Board tools", "Board rerolls and replay seeds live here so launch stays fast while utility stays visible.")}
+          ${renderInfoButton("board-reroll-info-btn", "Board tools", "Reforge the board or lock a replay seed.")}
         </div>
         <button id="board-reroll-btn" class="secondary-btn section-action-btn" type="button" ${model.rerollDisabled ? "disabled" : ""}>${model.rerollLabel}</button>
       </div>
       <div class="workspace-utility-stack">
         <div class="workspace-utility-copy">
-          <div class="section-label">Board utility</div>
+          <div class="section-label">Tools</div>
           <div id="home-board-selected-meta" class="focus-meta">${utilityCopy}</div>
           ${condensed ? "" : `<div class="focus-inline-meta">
-            <span class="mini-tag">${hero?.badge || "Run selected"}</span>
-            <span class="mini-tag">${hero?.utilityStatus || "Fresh reward line"}</span>
+            <span class="mini-tag">${hero?.badge || "Selected run"}</span>
+            <span class="mini-tag">${hero?.utilityStatus || "Fresh board"}</span>
           </div>`}
         </div>
         ${showLaunchOverflow ? `
@@ -98,19 +98,19 @@ function renderRaceToolsPanel(model, options = {}) {
         ${condensed ? "" : `<div id="event-custom-seed-note" class="focus-meta focus-seed-note">${model.customSeedNote}</div>`}
         ${condensed ? "" : `<div class="workspace-utility-readout">
           <div class="workspace-utility-item">
-            <div class="point-label">Run Reason</div>
+            <div class="point-label">Run</div>
             <div id="event-format-hero" class="point-value">${hero?.nextCopy || ""}</div>
           </div>
           <div class="workspace-utility-item">
-            <div class="point-label">Impact</div>
+            <div class="point-label">Damage</div>
             <div id="hero-recovery-copy" class="point-value">${hero?.recoveryCopy || ""}</div>
           </div>
           <div class="workspace-utility-item">
-            <div class="point-label">Replay Hook</div>
+            <div class="point-label">Replay</div>
             <div id="hero-replay-copy" class="point-value">${hero?.replayCopy || ""}</div>
           </div>
           <div class="workspace-utility-item">
-            <div class="point-label">Daily Heat</div>
+            <div class="point-label">Daily</div>
             <div id="hero-daily-copy" class="point-value">${hero?.dailyCopy || ""}</div>
           </div>
         </div>`}
@@ -125,7 +125,6 @@ function renderRaceBoard(model) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Strike Board</div>
-          <div class="section-note">Scroll the live line-up without crowding launch and tools.</div>
         </div>
         <div class="section-head-actions">
           <button id="home-board-prev" class="secondary-btn section-action-btn" type="button" ${model.currentPage <= 0 ? "disabled" : ""}>Prev</button>
@@ -160,9 +159,9 @@ function renderRaceSummary(model, options = {}) {
       <div class="section-head">
         <div class="section-head-main">
           <div class="section-label">Selected Run</div>
-          ${renderInfoButton("event-info-btn", "Run help", "Selected event detail, medal pressure, and seed status live here.")}
+          ${renderInfoButton("event-info-btn", "Run help", "Route, goal, and seed status.")}
         </div>
-        <div id="event-focus-badge" class="section-note hero-note">${hero?.badge || "Run selected"}</div>
+        <div id="event-focus-badge" class="section-note hero-note">${hero?.badge || "Selected run"}</div>
       </div>
       ${renderRaceFocus(model, { compact: !showPreview, showPreview })}
     </section>
@@ -195,9 +194,9 @@ export function renderRaceScreen(model, section) {
             <div class="section-head">
               <div class="section-head-main">
                 <div class="section-label">Selected Run</div>
-                ${renderInfoButton("event-info-btn", "Run help", "Selected event detail, medal pressure, and seed status live here.")}
+                ${renderInfoButton("event-info-btn", "Run help", "Route, goal, and seed status.")}
               </div>
-              <div id="event-focus-badge" class="section-note hero-note">${model.hero?.badge || "Run selected"}</div>
+              <div id="event-focus-badge" class="section-note hero-note">${model.hero?.badge || "Selected run"}</div>
             </div>
             ${renderRaceFocus(model, {
               showActions: true,

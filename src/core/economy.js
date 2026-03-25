@@ -12,17 +12,17 @@ export const CURRENCY_DEFS = {
   flux: {
     id: "flux",
     label: "Flux",
-    description: "Earned from racing. Spent on Foundry rolls and strike-board reforges.",
+    description: "Earn it on track. Spend it on rolls and reforges.",
   },
   scrap: {
     id: "scrap",
     label: "Scrap",
-    description: "Recovered from unkept cars. Spent on style unlocks.",
+    description: "Recovered from scrapped cars. Spend it on style.",
   },
   premium: {
     id: "premium",
     label: "Neon Tickets",
-    description: "Reserved for future premium purchases.",
+    description: "Reserved for future drops.",
   },
 };
 

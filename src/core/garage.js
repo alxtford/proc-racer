@@ -76,8 +76,8 @@ export function createEmptyGarageSlot(slotIndex = 0) {
     name: "Open Slot",
     tierId: "open",
     tierLabel: "Vacant",
-    role: "Foundry slot",
-    guidance: "Keep a Foundry roll here to expand your garage.",
+    role: "Open slot",
+    guidance: "Fill this slot from the Foundry.",
     traits: ["vacant", "expand"],
     color: "#13213d",
     accentColor: "#2ff6ff",
@@ -134,9 +134,9 @@ export function getGarageScore(car) {
 }
 
 function buildGuidance(base, tier) {
-  if (tier.id === "apex") return `${base.guidance} Apex roll with stronger overall headroom.`;
-  if (tier.id === "pro") return `${base.guidance} Tuned for cleaner medal pushes.`;
-  if (tier.id === "street") return `${base.guidance} Lower ceiling, but still race ready.`;
+  if (tier.id === "apex") return `${base.guidance} High ceiling.`;
+  if (tier.id === "pro") return `${base.guidance} Built for medal runs.`;
+  if (tier.id === "street") return `${base.guidance} Lower ceiling, still race-ready.`;
   return base.guidance;
 }
 
@@ -189,7 +189,7 @@ function createStarterCar(seed) {
     tierLabel: "Starter",
     name: "Factory Mule",
     role: "Starter",
-    guidance: "Cheap steel with just enough bite to survive. It will make you want better metal fast.",
+    guidance: "Starter steel with enough bite to stay in the fight.",
     traits: ["balanced", "underpowered"],
     color: "#6a84a8",
     accentColor: "#7de9ff",
