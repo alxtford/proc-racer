@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node scripts/serve.mjs",
+    "stop": "node scripts/stop-server.mjs",
     "serve": "npm start",
     "issues:auth": "node scripts/codex-issues.mjs auth",
     "issues:labels": "node scripts/codex-issues.mjs labels",

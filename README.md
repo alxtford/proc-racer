@@ -18,9 +18,12 @@ Requires Node 20+.
 ```bash
 npm install
 npm start
+npm stop
 ```
 
 Open `http://127.0.0.1:4173`.
+
+Use `npm stop` from another shell to tear down the local static server started by `npm start`.
 
 ## Validate
 
